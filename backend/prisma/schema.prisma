@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  password  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  dataRooms DataRoom[]
+  folders   Folder[]
+  files     File[]
+
+  @@map("users")
+}
+
+model DataRoom {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  ownerId     String   @map("user_id")
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  files       File[]
+  folders     Folder[]
+
+  @@index([ownerId])
+  @@index([createdAt])
+  @@map("data_rooms")
+}
+
+model Folder {
+  id         String   @id @default(uuid())
+  name       String
+  dataRoomId String   @map("data_room_id")
+  parentId   String?  @map("parent_folder_id")
+  userId     String   @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  dataRoom   DataRoom @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent     Folder?  @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children   Folder[] @relation("FolderHierarchy")
+  files      File[]
+
+  @@index([dataRoomId])
+  @@index([parentId])
+  @@index([userId])
+  @@index([dataRoomId, parentId])
+  @@index([createdAt])
+  @@map("folders")
+}
+
+model File {
+  id         String   @id @default(uuid())
+  name       String
+  dataRoomId String   @map("data_room_id")
+  folderId   String?  @map("folder_id")
+  userId     String   @map("user_id")
+  fileSize   BigInt?  @map("file_size")
+  mimeType   String?  @map("mime_type")
+  filePath   String?  @map("file_path")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  dataRoom   DataRoom @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
+  folder     Folder?  @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([folderId])
+  @@index([dataRoomId])
+  @@index([userId])
+  @@index([dataRoomId, folderId])
+  @@index([createdAt])
+  @@map("files")
+}
