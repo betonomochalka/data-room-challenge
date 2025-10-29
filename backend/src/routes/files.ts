@@ -65,6 +65,34 @@ router.get('/:id/view', asyncHandler(async (req: AuthenticatedRequest, res: Resp
     res.redirect(signedUrl);
 }));
 
+router.put('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    const userId = req.user?.id;
+    const { name } = req.body;
+
+    if (!name) {
+        return next(createError('Name is required', 400));
+    }
+
+    const file = await prisma.file.findFirst({
+        where: { id, userId },
+    });
+
+    if (!file) {
+        return next(createError('File not found', 404));
+    }
+
+    const updatedFile = await prisma.file.update({
+        where: { id },
+        data: { name },
+    });
+
+    res.status(200).json({
+        success: true,
+        data: updatedFile,
+    });
+}));
+
 router.post(
   '/upload',
   upload.single('file'),
