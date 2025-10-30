@@ -5,6 +5,7 @@ import { authenticateToken } from '../middleware/auth';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { AuthenticatedRequest } from '../types';
 import prisma from '../lib/prisma';
+import { checkAndThrowConflicts } from '../utils/conflictChecker';
 
 const router = Router();
 
@@ -234,30 +235,7 @@ router.post('/', validateFolderCreation, asyncHandler(async (req: AuthenticatedR
   }
 
   // Check if folder with same name already exists in the same location
-  const existingFolder = await prisma.folder.findFirst({
-    where: {
-      name,
-      parentId: parentId || null,
-      dataRoomId,
-    },
-  });
-
-  if (existingFolder) {
-    throw createError('Folder with this name already exists in this location', 409);
-  }
-
-  // Check if a file with the same name exists in the same location
-  const conflictingFile = await prisma.file.findFirst({
-    where: {
-      name,
-      folderId: parentId || null,
-      dataRoomId,
-    },
-  });
-
-  if (conflictingFile) {
-    throw createError('A file with this name already exists in this location', 409);
-  }
+  await checkAndThrowConflicts(name, dataRoomId, parentId || null);
 
   const folder = await prisma.folder.create({
     data: {
@@ -309,31 +287,9 @@ router.patch('/:id/rename', validateFolderRename, asyncHandler(async (req: Authe
 
   // Check if new name conflicts with existing folder or file in same location
   if (name && name !== folder.name) {
-    const conflictingFolder = await prisma.folder.findFirst({
-      where: {
-        name,
-        parentId: folder.parentId,
-        dataRoomId: folder.dataRoomId,
-        id: { not: id },
-      },
+    await checkAndThrowConflicts(name, folder.dataRoomId, folder.parentId, {
+      excludeFolderId: id,
     });
-
-    if (conflictingFolder) {
-      throw createError('Folder with this name already exists in this location', 409);
-    }
-
-    // Check if a file with the same name exists in the same location
-    const conflictingFile = await prisma.file.findFirst({
-      where: {
-        name,
-        folderId: folder.parentId,
-        dataRoomId: folder.dataRoomId,
-      },
-    });
-
-    if (conflictingFile) {
-      throw createError('A file with this name already exists in this location', 409);
-    }
   }
 
   const updatedFolder = await prisma.folder.update({

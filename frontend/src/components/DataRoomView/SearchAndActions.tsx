@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Upload, List, LayoutGrid } from 'lucide-react';
+import { Plus, Upload, List, LayoutGrid, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/ToggleGroup';
@@ -12,6 +12,8 @@ interface SearchAndActionsProps {
   showUploadButton: boolean;
   viewMode: 'grid' | 'list';
   onViewModeChange: (mode: 'grid' | 'list') => void;
+  onImportFromGoogleDrive?: () => void;
+  showGoogleDriveButton?: boolean;
 }
 
 export const SearchAndActions: React.FC<SearchAndActionsProps> = ({
@@ -22,6 +24,8 @@ export const SearchAndActions: React.FC<SearchAndActionsProps> = ({
   showUploadButton,
   viewMode,
   onViewModeChange,
+  onImportFromGoogleDrive,
+  showGoogleDriveButton = false,
 }) => {
   return (
     <div className="flex flex-col md:flex-row justify-between items-center my-6 gap-4">
@@ -34,7 +38,7 @@ export const SearchAndActions: React.FC<SearchAndActionsProps> = ({
           className="w-full"
         />
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <ToggleGroup 
           type="single" 
           value={viewMode} 
@@ -54,12 +58,21 @@ export const SearchAndActions: React.FC<SearchAndActionsProps> = ({
 
         <Button variant="outline" onClick={onCreateFolder}>
           <Plus className="mr-2 h-4 w-4" />
-          New Folder
+          <span className="hidden sm:inline">New Folder</span>
+          <span className="sm:hidden">Folder</span>
         </Button>
         {showUploadButton && onUploadFile && (
           <Button onClick={onUploadFile}>
             <Upload className="mr-2 h-4 w-4" />
-            Upload File
+            <span className="hidden sm:inline">Upload File</span>
+            <span className="sm:hidden">Upload</span>
+          </Button>
+        )}
+        {showGoogleDriveButton && onImportFromGoogleDrive && (
+          <Button variant="outline" onClick={onImportFromGoogleDrive}>
+            <Cloud className="mr-2 h-4 w-4" />
+            <span className="hidden sm:inline">Import from Drive</span>
+            <span className="sm:hidden">Drive</span>
           </Button>
         )}
       </div>

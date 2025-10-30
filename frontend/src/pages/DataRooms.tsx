@@ -19,6 +19,7 @@ import {
 import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
 import { Skeleton } from '../components/ui/Skeleton';
+import { GoogleDriveStatus } from '../components/GoogleDrive';
 import { formatDate } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
@@ -170,18 +171,21 @@ export const DataRooms: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Data Rooms</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your secure document repositories
-          </p>
-        </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Data Room
-        </Button>
-      </div>
+      <div className="flex flex-col lg:flex-row gap-8">
+        {/* Main content */}
+        <div className="flex-1">
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-3xl font-bold">Data Rooms</h1>
+              <p className="text-muted-foreground mt-1">
+                Manage your secure document repositories
+              </p>
+            </div>
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Data Room
+            </Button>
+          </div>
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -289,6 +293,13 @@ export const DataRooms: React.FC = () => {
           </CardContent>
         </Card>
       )}
+        </div>
+
+        {/* Sidebar - Google Drive Status */}
+        <aside className="lg:w-80 w-full">
+          <GoogleDriveStatus />
+        </aside>
+      </div>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent>

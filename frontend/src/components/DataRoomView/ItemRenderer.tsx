@@ -22,7 +22,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = ({ items, viewMode, onR
     if (item.type === 'folder') {
       navigate(`/data-rooms/${dataRoomId}/folders/${item.id}`);
     } else {
-      handleFileView(item.id);
+      handleFileView(item);
     }
   }, [navigate, handleFileView, dataRoomId]);
 

@@ -4,6 +4,7 @@ import { ChevronRight, ChevronDown, Folder, FileText, Edit, Trash2 } from 'lucid
 import { useFileViewer, useDataRoomData } from '@/hooks';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fileTreeEvents } from '@/lib/events';
+import { getFileIconAndColor } from '@/utils/fileIcons';
 
 interface TreeNodeProps {
   item: DataRoomItem;
@@ -20,6 +21,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({ item, level }) => {
   const triggerRef = useRef<HTMLDivElement>(null);
 
   const isFolder = item.type === 'folder';
+  const { Icon, color } = isFolder 
+    ? { Icon: Folder, color: 'text-yellow-500' }
+    : getFileIconAndColor(item.mimeType, item.name);
 
   const { folderQuery } = useDataRoomData({
     dataRoomId: dataRoomId,
@@ -46,7 +50,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ item, level }) => {
 
   const handleFileClick = () => {
     if (item.type === 'file') {
-      handleFileView(item.id);
+      handleFileView(item);
     }
   };
 
@@ -80,7 +84,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ item, level }) => {
           {isFolder ? (
             <Folder className="h-4 w-4 mr-2 text-yellow-500" />
           ) : (
-            <FileText className="h-4 w-4 mr-2 text-red-500" style={{ marginLeft: isFolder ? 0 : '1.25rem' }} />
+            <Icon className={`h-4 w-4 mr-2 ${color}`} style={{ marginLeft: isFolder ? 0 : '1.25rem' }} />
           )}
           <span>{item.name}</span>
         </div>

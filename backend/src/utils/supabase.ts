@@ -30,15 +30,31 @@ export const supabaseAnon = createClient(
 export const uploadFile = async (
   file: Buffer,
   fileName: string,
-  folder: string = 'uploads'
+  folder: string = 'uploads',
+  mimeType?: string
 ): Promise<string> => {
   const fileExt = fileName.split('.').pop();
   const filePath = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
 
+  // Determine content type based on mimeType or file extension
+  let contentType = mimeType || 'application/octet-stream';
+  if (!mimeType) {
+    const ext = fileExt?.toLowerCase();
+    const mimeMap: { [key: string]: string } = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'pdf': 'application/pdf',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
+    contentType = mimeMap[ext || ''] || 'application/octet-stream';
+  }
+
   const { data, error } = await supabase.storage
     .from('data-room-files')
     .upload(filePath, file, {
-      contentType: 'application/pdf',
+      contentType,
       upsert: false,
     });
 

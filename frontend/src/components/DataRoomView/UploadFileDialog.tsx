@@ -20,6 +20,7 @@ interface UploadFileDialogProps {
   onSubmit: (e: React.FormEvent) => void;
   isPending: boolean;
   uploadProgress?: { [key: string]: number };
+  completedCount?: number;
 }
 
 export const UploadFileDialog: React.FC<UploadFileDialogProps> = ({
@@ -32,6 +33,7 @@ export const UploadFileDialog: React.FC<UploadFileDialogProps> = ({
   onSubmit,
   isPending,
   uploadProgress = {},
+  completedCount = 0,
 }) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -52,22 +54,22 @@ export const UploadFileDialog: React.FC<UploadFileDialogProps> = ({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Upload PDF Files</DialogTitle>
-          <DialogDescription>Select one or more PDF files to upload</DialogDescription>
+          <DialogTitle>Upload Files</DialogTitle>
+          <DialogDescription>Select one or more files to upload (JPG, PNG, PDF, XLSX, DOCX)</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="file-upload">PDF Files</Label>
+            <Label htmlFor="file-upload">Files</Label>
             <Input
               id="file-upload"
               type="file"
-              accept=".pdf,application/pdf"
+              accept=".jpg,.jpeg,.png,.pdf,.xlsx,.docx,image/jpeg,image/png,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               multiple
               className="file:text-primary"
               onChange={handleFileChange}
             />
             <p className="text-sm text-muted-foreground">
-              You can select multiple files at once
+              You can select multiple files at once (JPG, PNG, PDF, XLSX, DOCX only)
             </p>
           </div>
 
@@ -129,7 +131,7 @@ export const UploadFileDialog: React.FC<UploadFileDialogProps> = ({
               Cancel
             </Button>
             <Button type="submit" disabled={isPending || selectedFiles.length === 0}>
-              {isPending ? `Uploading... (${Object.keys(uploadProgress).length}/${selectedFiles.length})` : `Upload ${selectedFiles.length} ${selectedFiles.length === 1 ? 'File' : 'Files'}`}
+              {isPending ? `Uploading... (${completedCount}/${selectedFiles.length})` : `Upload ${selectedFiles.length} ${selectedFiles.length === 1 ? 'File' : 'Files'}`}
             </Button>
           </div>
         </form>

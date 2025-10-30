@@ -29,6 +29,8 @@ interface DataRoomLayoutProps {
   children: React.ReactNode;
   onBackClick?: () => void;
   breadcrumbs?: BreadcrumbItem[];
+  onImportFromGoogleDrive?: () => void;
+  showGoogleDriveButton?: boolean;
 }
 
 export const DataRoomLayout: React.FC<DataRoomLayoutProps> = ({
@@ -46,6 +48,8 @@ export const DataRoomLayout: React.FC<DataRoomLayoutProps> = ({
   children,
   onBackClick,
   breadcrumbs,
+  onImportFromGoogleDrive,
+  showGoogleDriveButton = false,
 }) => {
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
@@ -64,6 +68,8 @@ export const DataRoomLayout: React.FC<DataRoomLayoutProps> = ({
           onUploadFile={onUpload}
           showUploadButton={true}
           onCreateFolder={onCreateFolder}
+          onImportFromGoogleDrive={onImportFromGoogleDrive}
+          showGoogleDriveButton={showGoogleDriveButton}
         />
       </div>
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { ColumnDef, CellContext, HeaderContext } from "@tanstack/react-table"
-import { ArrowUpDown, Folder, FileText as PdfIcon, MoreHorizontal, Eye, Edit, Trash2 } from "lucide-react"
+import { ArrowUpDown, Folder, MoreHorizontal, Eye, Edit, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import {
   DropdownMenu,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/DropdownMenu"
 import { File, Folder as IFolder } from "@/types"
 import { formatBytes, formatDate } from "@/lib/utils"
+import { getFileIconAndColor } from "@/utils/fileIcons"
 
 // Merged type for table and grid views
 export type DataRoomItem = (IFolder & { type: 'folder', size: null }) | (File & { type: 'file', size: number });
@@ -37,7 +38,9 @@ export const getColumns = (
     cell: ({ row }: CellContext<DataRoomItem, unknown>) => {
       const item = row.original;
       const isFolder = item.type === 'folder';
-      const Icon = isFolder ? Folder : PdfIcon;
+      const { Icon, color } = isFolder 
+        ? { Icon: Folder, color: 'text-yellow-500' }
+        : getFileIconAndColor(item.mimeType, item.name);
       
       const handleClick = () => {
         if (isFolder && onFolderClick) {
@@ -52,7 +55,7 @@ export const getColumns = (
           className="flex items-center gap-2 cursor-pointer hover:text-foreground"
           onClick={handleClick}
         >
-          <Icon className={`h-4 w-4 ${isFolder ? 'text-yellow-500' : 'text-red-500'}`} />
+          <Icon className={`h-4 w-4 ${color}`} />
           <span>{item.name}</span>
         </div>
       );

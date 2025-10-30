@@ -9,17 +9,31 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
-  password  String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  dataRooms DataRoom[]
-  folders   Folder[]
-  files     File[]
+  id              String            @id @default(uuid())
+  email           String            @unique
+  name            String?
+  password        String?
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  dataRooms       DataRoom[]
+  folders         Folder[]
+  files           File[]
+  googleDriveToken GoogleDriveToken?
 
   @@map("users")
+}
+
+model GoogleDriveToken {
+  id           String   @id @default(uuid())
+  userId       String   @unique @map("user_id")
+  accessToken  String   @map("access_token")
+  refreshToken String?  @map("refresh_token")
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("google_drive_tokens")
 }
 
 model DataRoom {

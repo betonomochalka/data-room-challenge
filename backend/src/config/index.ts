@@ -24,4 +24,5 @@ export const config = {
   allowedOrigins: process.env.ALLOWED_ORIGINS!,
   port: process.env.PORT || '3001',
   nodeEnv: process.env.NODE_ENV || 'development',
+  maxFileSize: 4.5 * 1024 * 1024, // 4.5MB
 };

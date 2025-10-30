@@ -15,6 +15,7 @@ import {
   useItemRename,
   useFileViewer,
   useBreadcrumbs,
+  useGoogleDrive,
 } from '@/hooks';
 import { useDataRoomMutations } from '@/hooks/useDataRoomMutations';
 import { EmptyState } from '@/components/DataRoomView/EmptyState';
@@ -23,13 +24,16 @@ import {
   UploadFileDialog,
   RenameDialog,
 } from '@/components/Dialogs';
+import { GoogleDriveFilePicker } from '@/components/GoogleDrive';
 import { fileTreeEvents } from '@/lib/events';
+import { useQueryClient } from '@tanstack/react-query';
 
 type ViewMode = 'grid' | 'list';
 
 export function DataRoomRoot() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     // Default to 'list' on mobile, 'grid' on desktop
@@ -39,6 +43,8 @@ export function DataRoomRoot() {
     return 'grid';
   });
   const debouncedSearch = useDebounce(searchQuery, 300);
+  const [isGoogleDrivePickerOpen, setIsGoogleDrivePickerOpen] = useState(false);
+  const { isConnected } = useGoogleDrive();
 
   const {
     dataRoomQuery,
@@ -107,7 +113,7 @@ export function DataRoomRoot() {
     if (item.type === 'folder') {
       navigate(`/data-rooms/${id}/folders/${item.id}`);
     } else {
-      handleFileView(item.id);
+      handleFileView(item);
     }
   }, [navigate, handleFileView, id]);
 
@@ -131,6 +137,21 @@ export function DataRoomRoot() {
     dataRoomId: id!,
     dataRoomName: dataRoomQuery?.data?.data.name,
   });
+
+  const handleGoogleDriveImport = () => {
+    setIsGoogleDrivePickerOpen(true);
+  };
+
+  const handleGoogleDriveImportSuccess = useCallback(() => {
+    // Batch query invalidations with a delay to avoid rate limiting
+    // React Query batches these automatically, but we add a delay to prevent immediate refetch
+    setTimeout(() => {
+      // Batch all invalidations together - React Query will handle batching
+      queryClient.invalidateQueries({ queryKey: ['dataRoom', id], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['allFolders', id], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['allFiles', id], exact: false });
+    }, 500);
+  }, [queryClient, id]);
 
   const onConfirmDelete = (confirm: boolean) => {
     if (confirm && itemToDelete) {
@@ -162,6 +183,8 @@ export function DataRoomRoot() {
         itemToDelete={itemToDelete}
         onConfirmDelete={onConfirmDelete}
         breadcrumbs={breadcrumbs}
+        onImportFromGoogleDrive={handleGoogleDriveImport}
+        showGoogleDriveButton={isConnected}
       >
         {items.length === 0 ? (
           <EmptyState 
@@ -216,6 +239,7 @@ export function DataRoomRoot() {
         onSubmit={uploadFile.handleSubmit}
         isPending={uploadFile.isPending}
         uploadProgress={uploadFile.uploadProgress}
+        completedCount={uploadFile.completedCount}
       />
       <RenameDialog
         isOpen={renameItem.isOpen}
@@ -225,6 +249,12 @@ export function DataRoomRoot() {
         onNewNameChange={renameItem.setNewName}
         onSubmit={renameItem.handleSubmit}
         isPending={renameItem.isPending}
+      />
+      <GoogleDriveFilePicker
+        open={isGoogleDrivePickerOpen}
+        onOpenChange={setIsGoogleDrivePickerOpen}
+        dataRoomId={id}
+        onImportSuccess={handleGoogleDriveImportSuccess}
       />
     </>
   );

@@ -7,3 +7,5 @@ export * from './useItemRename';
 export { useDisclosure } from './useDisclosure';
 export { useFileViewer } from './useFileViewer';
 export { useBreadcrumbs } from './useBreadcrumbs';
+export { useGoogleDrive } from './useGoogleDrive';
+export { useGoogleDriveFiles } from './useGoogleDriveFiles';

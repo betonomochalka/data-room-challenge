@@ -1,10 +1,26 @@
+# Data Room
+
+A secure file and folder management application for organizing and sharing documents. Built with modern web technologies, Data Room provides a user-friendly interface for managing data rooms, folders, and files with support for Google Drive integration.
+
+## Features
+
+- 🔐 **Secure Authentication**: Google OAuth authentication via Supabase Auth
+- 📁 **Data Room Management**: Create and organize multiple data rooms
+- 🗂️ **Folder Organization**: Create nested folder structures for better organization
+- 📄 **File Management**: Upload, view, rename, and delete files
+- ☁️ **Google Drive Integration**: Import files directly from Google Drive
+- 👁️ **File Previews**: View PDFs and images directly in the browser
+- 🔍 **Search Functionality**: Search files and folders within data rooms
+- 📱 **Responsive Design**: Works seamlessly on desktop and mobile devices
+
 ## Tech Stack
 
--   **Frontend:** React, TypeScript, React Router, Tailwind CSS (based on UI components)
--   **Backend:** Node.js, Express.js (likely), TypeScript
+-   **Frontend:** React 19, TypeScript, React Router v7, TanStack Query, Tailwind CSS
+-   **Backend:** Node.js, Express.js, TypeScript
 -   **Database:** Supabase (PostgreSQL)
 -   **ORM:** Prisma
 -   **Authentication:** Supabase Auth (Google OAuth)
+-   **File Storage:** Supabase Storage
 -   **Deployment:** Vercel
 
 ## Design Decisions
@@ -21,7 +37,8 @@ For more detailed information see [ARCHITECTURE.md](ARCHITECTURE.md).
 ### Prerequisites
 
 -   Node.js (v18 or later)
--   npm
+-   npm (v8 or later)
+-   Git
 -   A Supabase account and a new project created.
 
 ### Local Development
@@ -63,7 +80,7 @@ For more detailed information see [ARCHITECTURE.md](ARCHITECTURE.md).
     - Create OAuth 2.0 credentials (Web application)
     - Add authorized redirect URIs: `http://localhost:3001/api/google-drive/callback` (for local) and your production callback URL
     - Copy the Client ID and Client Secret to your `backend/.env` file
-    - See `backend/env.example` for the required environment variables
+    - See `backend/.env.example` for the required environment variables
 
 5.  **Apply database schema:**
     This command will push the schema defined in `backend/prisma/schema.prisma` to your Supabase database.
@@ -77,7 +94,7 @@ For more detailed information see [ARCHITECTURE.md](ARCHITECTURE.md).
     npm run dev
     ```
     -   Frontend will be running on `http://localhost:3000`
-    -   Backend will be running on a different port (e.g., `http://localhost:3001`)
+    -   Backend will be running on `http://localhost:3001`
 
 ## Deployment
 
@@ -91,7 +108,7 @@ This project is configured for easy deployment to Vercel.
     -   **Root Directory:** `frontend`
     -   **Build Command:** `npm run build`
     -   **Output Directory:** `build`
-    -   **Environment Variables:** Add the following environment variables in the Vercel project settings. You can use your `frontend/.env` file as a reference. For more details, see `frontend/env.example`.
+    -   **Environment Variables:** Add the following environment variables in the Vercel project settings. You can use your `frontend/.env.local` file as a reference. For more details, see `frontend/env.example`.
         ```env
         REACT_APP_API_URL="<your_deployed_backend_url>/api"
         REACT_APP_SUPABASE_URL="https://[YOUR_SUPABASE_REF].supabase.co"
@@ -102,7 +119,7 @@ This project is configured for easy deployment to Vercel.
     -   **Root Directory:** `backend`
     -   Vercel will detect the `vercel.json` and configure it as a serverless function.
     -   **OPTIONS Allow list:** I recommend to add /api. You can find it in project settings.
-    -   **Environment Variables:** Add the following environment variables in the Vercel project settings. For more details, see `backend/env.example`.
+    -   **Environment Variables:** Add the following environment variables in the Vercel project settings. For more details, see `backend/.env.example`.
         ```env
         DATABASE_URL="<your_supabase_connection_string>"
         DIRECT_URL="<your_supabase_direct_connection_string>"

@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { toast } from '../lib/toast';
 import { useDataRoomMutations } from './useDataRoomMutations';
 import { SUCCESS_MESSAGES } from '@/lib/errorMessages';
+import { isValidFileType, MAX_FILE_SIZE, validateFileSize, ALLOWED_EXTENSIONS } from '@/utils/fileValidation';
+import { Folder, File as FileType } from '@/types';
 
 interface SelectedFile {
   file: File;
@@ -16,13 +18,16 @@ interface SelectedFile {
 export const useFileUpload = (
   dataRoomId?: string,
   folderId?: string,
-  folders?: any[],
-  existingFiles?: any[]
+  folders?: Folder[],
+  existingFiles?: FileType[]
 ) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+  const [isUploading, setIsUploading] = useState(false);
+  const [completedCount, setCompletedCount] = useState(0);
   const { uploadFileMutation } = useDataRoomMutations({ dataRoomId, folderId });
+  const uploadCountRef = useRef({ success: 0, failure: 0, total: 0 });
 
   const open = () => setIsOpen(true);
   
@@ -30,27 +35,44 @@ export const useFileUpload = (
     setIsOpen(false);
     setSelectedFiles([]);
     setUploadProgress({});
+    setIsUploading(false);
+    setCompletedCount(0);
+    uploadCountRef.current = { success: 0, failure: 0, total: 0 };
   };
 
   const handleFilesSelect = (files: File[]) => {
-    const MAX_FILE_SIZE = 4.5 * 1024 * 1024; // 4.5MB in bytes
     const validFiles: SelectedFile[] = [];
     const invalidFiles: string[] = [];
+    const invalidTypeFiles: string[] = [];
 
     files.forEach((file) => {
-      if (file.size > MAX_FILE_SIZE) {
+      const isValidType = isValidFileType(file.type, file.name);
+      const sizeValidation = validateFileSize(file.size);
+
+      if (!isValidType) {
+        invalidTypeFiles.push(file.name);
+      } else if (!sizeValidation.valid) {
         invalidFiles.push(file.name);
       } else {
+        // Remove extension from name for cleaner display
+        const extensionPattern = new RegExp(`\\.(${ALLOWED_EXTENSIONS.join('|')})$`, 'i');
+        const nameWithoutExt = file.name.replace(extensionPattern, '');
         validFiles.push({
           file,
-          name: file.name.replace('.pdf', ''),
+          name: nameWithoutExt || file.name,
         });
       }
     });
 
+    if (invalidTypeFiles.length > 0) {
+      toast.error(
+        `${invalidTypeFiles.length} file(s) have invalid type. Only JPG, PNG, PDF, XLSX, and DOCX files are allowed: ${invalidTypeFiles.join(', ')}`
+      );
+    }
+
     if (invalidFiles.length > 0) {
       toast.error(
-        `${invalidFiles.length} file(s) are too large. Maximum size is 4.5MB per file: ${invalidFiles.join(', ')}`
+        `${invalidFiles.length} file(s) are too large. Maximum size is ${(MAX_FILE_SIZE / (1024 * 1024)).toFixed(1)}MB per file: ${invalidFiles.join(', ')}`
       );
     }
 
@@ -127,23 +149,29 @@ export const useFileUpload = (
       return;
     }
 
-    let successCount = 0;
-    let failureCount = 0;
-    const totalFiles = selectedFiles.length;
+    // Reset counters and set uploading state
+    uploadCountRef.current = { success: 0, failure: 0, total: selectedFiles.length };
+    setIsUploading(true);
+    setCompletedCount(0);
 
     const handleUploadComplete = () => {
-      if (successCount + failureCount === totalFiles) {
-        if (totalFiles === 1) {
-          if (successCount === 1) {
+      const { success, failure, total } = uploadCountRef.current;
+      const completed = success + failure;
+      setCompletedCount(completed);
+      
+      if (completed === total) {
+        setIsUploading(false);
+        if (total === 1) {
+          if (success === 1) {
             toast.success(SUCCESS_MESSAGES.FILE_UPLOADED);
           }
         } else {
-          if (successCount > 0 && failureCount === 0) {
-            toast.success(`Successfully uploaded ${successCount} file${successCount > 1 ? 's' : ''}`);
-          } else if (successCount > 0 && failureCount > 0) {
-            toast.warning(`Uploaded ${successCount} file${successCount > 1 ? 's' : ''}, ${failureCount} failed`);
-          } else if (failureCount > 0) {
-            toast.error(`Failed to upload ${failureCount} file${failureCount > 1 ? 's' : ''}`);
+          if (success > 0 && failure === 0) {
+            toast.success(`Successfully uploaded ${success} file${success > 1 ? 's' : ''}`);
+          } else if (success > 0 && failure > 0) {
+            toast.warning(`Uploaded ${success} file${success > 1 ? 's' : ''}, ${failure} failed`);
+          } else if (failure > 0) {
+            toast.error(`Failed to upload ${failure} file${failure > 1 ? 's' : ''}`);
           }
         }
         
@@ -160,11 +188,11 @@ export const useFileUpload = (
         folderId: folderId || null,
       }, {
         onSuccess: () => {
-          successCount++;
+          uploadCountRef.current.success++;
           handleUploadComplete();
         },
         onError: () => {
-          failureCount++;
+          uploadCountRef.current.failure++;
           handleUploadComplete();
         },
       });
@@ -175,13 +203,14 @@ export const useFileUpload = (
     isOpen,
     selectedFiles,
     uploadProgress,
+    completedCount,
     open,
     close,
     handleFilesSelect,
     handleFileNameChange,
     handleFileRemove,
     handleSubmit,
-    isPending: uploadFileMutation.isPending,
+    isPending: isUploading,
   };
 };
 

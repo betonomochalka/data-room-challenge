@@ -4,12 +4,14 @@ import { asyncHandler, createError } from '../middleware/errorHandler';
 import { AuthenticatedRequest } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { uploadFile, deleteFile as deleteSupabaseFile, getSignedUrl } from '../utils/supabase';
+import { config } from '../config';
+import { validateFileType } from '../utils/fileValidation';
+import { checkAndThrowConflicts } from '../utils/conflictChecker';
 
 const router = Router();
-const MAX_FILE_SIZE = 4.5 * 1024 * 1024; // 4.5MB
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_SIZE }
+  limits: { fileSize: config.maxFileSize }
 });
 
 router.get('/', asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -84,31 +86,9 @@ router.put('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response,
 
     // Check if new name conflicts with existing folder or file in same location
     if (name && name !== file.name) {
-        const conflictingFolder = await prisma.folder.findFirst({
-            where: {
-                name,
-                parentId: file.folderId,
-                dataRoomId: file.dataRoomId,
-            },
+        await checkAndThrowConflicts(name, file.dataRoomId, file.folderId, {
+            excludeFileId: id,
         });
-
-        if (conflictingFolder) {
-            throw createError('A folder with this name already exists in this location', 409);
-        }
-
-        // Check if another file with the same name exists in the same location
-        const conflictingFile = await prisma.file.findFirst({
-            where: {
-                name,
-                folderId: file.folderId,
-                dataRoomId: file.dataRoomId,
-                id: { not: id },
-            },
-        });
-
-        if (conflictingFile) {
-            throw createError('A file with this name already exists in this location', 409);
-        }
     }
 
     const updatedFile = await prisma.file.update({
@@ -128,7 +108,7 @@ router.post(
   asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (req.file === undefined && (req as any).multerError) {
       if ((req as any).multerError.code === 'LIMIT_FILE_SIZE') {
-        return next(createError('File is too large. Maximum size is 4.5MB.', 413));
+        return next(createError(`File is too large. Maximum size is ${(config.maxFileSize / (1024 * 1024)).toFixed(1)}MB.`, 413));
       }
     }
 
@@ -148,36 +128,19 @@ router.post(
         return next(createError('dataRoomId is required', 400));
     }
 
+    // Validate file type
+    const validation = validateFileType(file.mimetype, file.originalname);
+    if (!validation.valid) {
+      return next(createError(validation.error || 'Invalid file type', 400));
+    }
+
     try {
       const finalName = name || file.originalname;
       
-      // Check if a folder with the same name exists in the same location
-      const conflictingFolder = await prisma.folder.findFirst({
-        where: {
-          name: finalName,
-          parentId: folderId || null,
-          dataRoomId,
-        },
-      });
+      // Check for name conflicts
+      await checkAndThrowConflicts(finalName, dataRoomId, folderId || null);
 
-      if (conflictingFolder) {
-        return next(createError('A folder with this name already exists in this location', 409));
-      }
-
-      // Check if a file with the same name already exists in the same location
-      const conflictingFile = await prisma.file.findFirst({
-        where: {
-          name: finalName,
-          folderId: folderId || null,
-          dataRoomId,
-        },
-      });
-
-      if (conflictingFile) {
-        return next(createError('A file with this name already exists in this location', 409));
-      }
-
-      const filePath = await uploadFile(file.buffer, finalName, `uploads/${userId}`);
+      const filePath = await uploadFile(file.buffer, finalName, `uploads/${userId}`, file.mimetype);
 
       const newFile = await prisma.file.create({
         data: {

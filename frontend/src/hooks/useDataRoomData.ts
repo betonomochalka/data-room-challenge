@@ -16,7 +16,9 @@ type DataRoomContents = DataRoom & {
  * Custom hook for fetching data room and folder contents in a consolidated manner.
  */
 export const useDataRoomData = ({ dataRoomId, folderId }: UseDataRoomDataProps) => {
-  const isValidId = dataRoomId && !dataRoomId.startsWith('temp-');
+  const isValidDataRoomId = dataRoomId && !dataRoomId.startsWith('temp-');
+  const isValidFolderId = !folderId || !folderId.startsWith('temp-');
+  const isValidId = isValidDataRoomId && isValidFolderId;
 
   const dataQuery = useQuery<ApiResponse<DataRoomContents | any>>({
     queryKey: folderId ? ['folder', folderId] : ['dataRoom', dataRoomId],
