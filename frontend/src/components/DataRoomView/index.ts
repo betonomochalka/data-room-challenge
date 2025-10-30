@@ -1,10 +1,12 @@
 export { CreateFolderDialog } from './CreateFolderDialog';
 export { UploadFileDialog } from './UploadFileDialog';
 export * from './RenameDialog';
-export { FoldersGrid } from './FoldersGrid';
-export { FilesGrid } from './FilesGrid';
 export { EmptyState } from './EmptyState';
 export { DataRoomHeader } from './DataRoomHeader';
 export * from './SearchAndActions';
 export * from './DataRoomLayout';
 export * from './columns';
+export { default as DataRoomItemView } from './DataRoomItemView';
+export { ItemRenderer } from './ItemRenderer';
+export { FoldersGrid } from './FoldersGrid';
+export { FilesGrid } from './FilesGrid';

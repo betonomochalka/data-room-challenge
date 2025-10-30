@@ -38,8 +38,14 @@ describe('Auth Middleware - authenticateToken', () => {
   let mockReq: Partial<AuthenticatedRequest>;
   let mockRes: Partial<Response>;
   let nextFn: NextFunction;
+  let consoleErrorSpy: jest.SpyInstance;
+  let consoleLogSpy: jest.SpyInstance;
 
   beforeEach(async () => {
+    // Suppress console output
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    
     // Reset all mocks before each test
     jest.resetModules();
     mockGetUser.mockReset();
@@ -59,6 +65,12 @@ describe('Auth Middleware - authenticateToken', () => {
     nextFn = jest.fn();
   });
 
+  afterEach(() => {
+    // Restore console output
+    consoleErrorSpy.mockRestore();
+    consoleLogSpy.mockRestore();
+  });
+
   it('should call next with 401 error if no token is provided', async () => {
     await authenticateToken(mockReq as AuthenticatedRequest, mockRes as Response, nextFn);
     expect(nextFn).toHaveBeenCalledWith(expect.objectContaining({ status: 401 }));
@@ -75,6 +87,7 @@ describe('Auth Middleware - authenticateToken', () => {
     await authenticateToken(mockReq as AuthenticatedRequest, mockRes as Response, nextFn);
     expect(nextFn).toHaveBeenCalledWith(expect.objectContaining({ status: 401 }));
     expect(createError).toHaveBeenCalledWith('Invalid or expired token', 401);
+    expect(consoleErrorSpy).toHaveBeenCalled();
   });
 
   it('should attach user to request and call next if token is valid and user exists', async () => {
@@ -91,6 +104,7 @@ describe('Auth Middleware - authenticateToken', () => {
 
     expect(mockReq.user).toEqual(mockUser);
     expect(nextFn).toHaveBeenCalledWith();
+    expect(consoleLogSpy).not.toHaveBeenCalled();
   });
 
   it('should create a new user, attach to request, and call next if token is valid but user does not exist', async () => {
@@ -115,6 +129,7 @@ describe('Auth Middleware - authenticateToken', () => {
     }));
     expect(mockReq.user).toEqual(createdUser);
     expect(nextFn).toHaveBeenCalledWith();
+    expect(consoleLogSpy).toHaveBeenCalled();
   });
 });
 

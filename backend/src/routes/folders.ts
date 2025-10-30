@@ -246,6 +246,19 @@ router.post('/', validateFolderCreation, asyncHandler(async (req: AuthenticatedR
     throw createError('Folder with this name already exists in this location', 409);
   }
 
+  // Check if a file with the same name exists in the same location
+  const conflictingFile = await prisma.file.findFirst({
+    where: {
+      name,
+      folderId: parentId || null,
+      dataRoomId,
+    },
+  });
+
+  if (conflictingFile) {
+    throw createError('A file with this name already exists in this location', 409);
+  }
+
   const folder = await prisma.folder.create({
     data: {
       name,
@@ -294,7 +307,7 @@ router.patch('/:id/rename', validateFolderRename, asyncHandler(async (req: Authe
     return next(createError('Folder not found', 404));
   }
 
-  // Check if new name conflicts with existing folder in same location
+  // Check if new name conflicts with existing folder or file in same location
   if (name && name !== folder.name) {
     const conflictingFolder = await prisma.folder.findFirst({
       where: {
@@ -307,6 +320,19 @@ router.patch('/:id/rename', validateFolderRename, asyncHandler(async (req: Authe
 
     if (conflictingFolder) {
       throw createError('Folder with this name already exists in this location', 409);
+    }
+
+    // Check if a file with the same name exists in the same location
+    const conflictingFile = await prisma.file.findFirst({
+      where: {
+        name,
+        folderId: folder.parentId,
+        dataRoomId: folder.dataRoomId,
+      },
+    });
+
+    if (conflictingFile) {
+      throw createError('A file with this name already exists in this location', 409);
     }
   }
 

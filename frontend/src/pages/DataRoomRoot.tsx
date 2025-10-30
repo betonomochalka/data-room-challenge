@@ -1,20 +1,19 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { DataTable } from '@/components/DataTable';
 import {
   DataRoomLayout,
+  DataRoomItem,
+  ItemRenderer,
   FoldersGrid,
   FilesGrid,
-  DataRoomItem,
-  getColumns,
 } from '@/components/DataRoomView';
 import { 
   useDataRoomData, 
   useDebounce, 
-  useFileViewer,
   useCreateFolder,
   useFileUpload,
   useItemRename,
+  useFileViewer,
 } from '@/hooks';
 import { useDataRoomMutations } from '@/hooks/useDataRoomMutations';
 import { EmptyState } from '@/components/DataRoomView/EmptyState';
@@ -48,8 +47,6 @@ export function DataRoomRoot() {
 
   const { handleFileView } = useFileViewer();
   const createFolder = useCreateFolder(id);
-  const uploadFile = useFileUpload(id, undefined, foldersQuery.data?.data);
-  const renameItem = useItemRename(id);
   const { deleteFolderMutation, deleteFileMutation } = useDataRoomMutations({ dataRoomId: id });
   
   const [itemToDelete, setItemToDelete] = useState<DataRoomItem | null>(null);
@@ -58,27 +55,38 @@ export function DataRoomRoot() {
     setItemToDelete(item);
   }, []);
 
+  // Get root-level folders and files for duplicate validation (without search filter)
+  const rootFolders = useMemo(
+    () => foldersQuery.data?.data.folders?.filter((folder: any) => !folder.parentId) || [],
+    [foldersQuery.data]
+  );
+
+  const rootFiles = useMemo(
+    () => filesQuery.data?.data?.filter((file: any) => !file.folderId) || [],
+    [filesQuery.data]
+  );
+
+  const uploadFile = useFileUpload(id, undefined, rootFolders, rootFiles);
+  const renameItem = useItemRename(id);
+
   const filteredFolders = useMemo(
     () =>
-      foldersQuery.data?.data.folders?.filter((folder: any) =>
-        !folder.parentId && folder.name.toLowerCase().includes(debouncedSearch.toLowerCase())
-      ) || [],
+      foldersQuery.data?.data.folders
+        ?.filter((folder: any) => folder != null && !folder.parentId && folder.name.toLowerCase().includes(debouncedSearch.toLowerCase()))
+        .map((folder: any) => ({ ...folder, type: 'folder' as const, size: null })) || [],
     [foldersQuery.data, debouncedSearch]
   );
 
   const filteredFiles = useMemo(
     () =>
-      filesQuery.data?.data?.filter((file: any) =>
-        !file.folderId && file.name.toLowerCase().includes(debouncedSearch.toLowerCase())
-      ) || [],
+      filesQuery.data?.data
+        ?.filter((file: any) => file != null && !file.folderId && file.name.toLowerCase().includes(debouncedSearch.toLowerCase()))
+        .map((file: any) => ({ ...file, type: 'file' as const, size: Number(file.fileSize) || 0 })) || [],
     [filesQuery.data, debouncedSearch]
   );
   
   const items = useMemo(() => {
-    const combinedItems: DataRoomItem[] = [
-      ...filteredFolders.map((folder: any) => ({ ...folder, type: 'folder' as const, size: null })),
-      ...filteredFiles.map((file: any) => ({ ...file, type: 'file' as const, size: Number(file.fileSize) || 0 })),
-    ];
+    const combinedItems: DataRoomItem[] = [...filteredFolders, ...filteredFiles];
     return combinedItems.sort((a, b) => {
         if (a.type === 'folder' && b.type === 'file') return -1;
         if (a.type === 'file' && b.type === 'folder') return 1;
@@ -87,17 +95,13 @@ export function DataRoomRoot() {
     });
   }, [filteredFolders, filteredFiles]);
 
-  const handleFileClick = useCallback((item: DataRoomItem) => {
-    if (item.type === 'file') {
-      handleFileView(item.id);
-    }
-  }, [handleFileView]);
-
-  const handleFolderClick = useCallback((item: DataRoomItem) => {
+  const handleView = useCallback((item: DataRoomItem) => {
     if (item.type === 'folder') {
       navigate(`/data-rooms/${id}/folders/${item.id}`);
+    } else {
+      handleFileView(item.id);
     }
-  }, [navigate, id]);
+  }, [navigate, handleFileView, id]);
 
   const handleRename = useCallback((item: DataRoomItem) => {
     renameItem.open({ id: item.id, name: item.name, type: item.type });
@@ -113,11 +117,6 @@ export function DataRoomRoot() {
     };
   }, [handleRename, handleDelete]);
 
-  const columns = useMemo(
-    () => getColumns(handleFileClick, handleRename, handleDelete, handleFolderClick),
-    [handleFileClick, handleRename, handleDelete, handleFolderClick]
-  );
-
   const isLoading = dataRoomQuery?.isLoading || foldersQuery.isLoading || filesQuery.isLoading;
 
   const onConfirmDelete = (confirm: boolean) => {
@@ -131,6 +130,10 @@ export function DataRoomRoot() {
     setItemToDelete(null);
   };
 
+  if (foldersQuery.isError || filesQuery.isError) {
+    return <div>Error: {foldersQuery.error?.message || filesQuery.error?.message}</div>;
+  }
+  
   return (
     <>
       <DataRoomLayout
@@ -158,28 +161,25 @@ export function DataRoomRoot() {
         ) : viewMode === 'grid' ? (
           <>
             <FoldersGrid
-              folders={items.filter((item): item is Extract<DataRoomItem, { type: 'folder' }> => item.type === 'folder')}
-              dataRoomId={id!}
+              folders={filteredFolders}
               onRename={handleRename}
               onDelete={handleDelete}
+              onView={handleView}
             />
             <FilesGrid
-              files={items.filter((item): item is Extract<DataRoomItem, { type: 'file' }> => item.type === 'file')}
-              folders={foldersQuery.data?.data || []}
-              isSearching={!!debouncedSearch.trim()}
-              searchQuery={debouncedSearch}
-              onView={handleFileClick}
+              files={filteredFiles}
               onRename={handleRename}
               onDelete={handleDelete}
+              onView={handleView}
             />
           </>
         ) : (
-          <DataTable
-            columns={columns}
-            data={items}
-            onView={handleFileClick}
+          <ItemRenderer
+            items={items}
+            viewMode={viewMode}
             onRename={handleRename}
             onDelete={handleDelete}
+            dataRoomId={id!}
           />
         )}
       </DataRoomLayout>
@@ -195,12 +195,13 @@ export function DataRoomRoot() {
       <UploadFileDialog
         isOpen={uploadFile.isOpen}
         onOpenChange={(open) => !open && uploadFile.close()}
-        selectedFile={uploadFile.selectedFile}
-        fileName={uploadFile.fileName}
-        onFileNameChange={uploadFile.setFileName}
-        onFileSelect={uploadFile.handleFileSelect}
+        selectedFiles={uploadFile.selectedFiles}
+        onFilesSelect={uploadFile.handleFilesSelect}
+        onFileNameChange={uploadFile.handleFileNameChange}
+        onFileRemove={uploadFile.handleFileRemove}
         onSubmit={uploadFile.handleSubmit}
         isPending={uploadFile.isPending}
+        uploadProgress={uploadFile.uploadProgress}
       />
       <RenameDialog
         isOpen={renameItem.isOpen}

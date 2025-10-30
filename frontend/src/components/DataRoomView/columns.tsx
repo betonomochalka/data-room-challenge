@@ -1,7 +1,7 @@
 "use client"
 
 import { ColumnDef, CellContext, HeaderContext } from "@tanstack/react-table"
-import { ArrowUpDown, Folder, File as FileIcon, MoreHorizontal, Eye, Edit, Trash2 } from "lucide-react"
+import { ArrowUpDown, Folder, FileText as PdfIcon, MoreHorizontal, Eye, Edit, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import {
   DropdownMenu,
@@ -37,7 +37,7 @@ export const getColumns = (
     cell: ({ row }: CellContext<DataRoomItem, unknown>) => {
       const item = row.original;
       const isFolder = item.type === 'folder';
-      const Icon = isFolder ? Folder : FileIcon;
+      const Icon = isFolder ? Folder : PdfIcon;
       
       const handleClick = () => {
         if (isFolder && onFolderClick) {
@@ -52,7 +52,7 @@ export const getColumns = (
           className="flex items-center gap-2 cursor-pointer hover:text-foreground"
           onClick={handleClick}
         >
-          <Icon className="h-4 w-4 text-muted-foreground" />
+          <Icon className={`h-4 w-4 ${isFolder ? 'text-yellow-500' : 'text-red-500'}`} />
           <span>{item.name}</span>
         </div>
       );

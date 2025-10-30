@@ -14,7 +14,7 @@ const FileTree: React.FC = () => {
     
     // Filter to only show root-level items (parentId/folderId is null)
     const rootFolders = folders.filter((folder: any) => !folder.parentId);
-    const rootFiles = files.filter((file: any) => !file.folderId);
+    const rootFiles = files.filter((file: any) => file && !file.folderId);
     
     const combinedItems: DataRoomItem[] = [
       ...rootFolders.map((folder: any) => ({ ...folder, type: 'folder' as const, size: null })),

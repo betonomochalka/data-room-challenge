@@ -31,5 +31,8 @@
   "author": "Data Room Team",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "dotenv-cli": "^11.0.0"
   }
 }

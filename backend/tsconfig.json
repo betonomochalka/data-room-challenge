@@ -25,18 +25,19 @@
     "paths": {
       "@/*": ["src/*"]
     },
+    "types": ["jest", "node"],
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
   "include": [
     "src/**/*",
-    "prisma/**/*"
+    "prisma/**/*",
+    "**/*.test.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "**/*.test.ts",
     "**/*.spec.ts",
     "prisma/seed.ts"
   ]

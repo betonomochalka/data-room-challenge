@@ -95,14 +95,31 @@ class ToastManager {
       border-left: 4px solid ${this.getColor(type)};
     `;
 
-    const icon = document.createElement('span');
-    icon.style.cssText = `
-      font-size: 20px;
-      color: ${this.getColor(type)};
-      font-weight: bold;
-      ${type === 'loading' ? 'animation: spin 1s linear infinite;' : ''}
-    `;
-    icon.textContent = this.getIcon(type);
+    let icon: HTMLElement;
+    
+    if (type === 'loading') {
+      // Create a CSS spinner for loading type
+      const loadingColor = this.getColor(type);
+      icon = document.createElement('div');
+      icon.style.cssText = `
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(107, 114, 128, 0.2);
+        border-top-color: ${loadingColor};
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        flex-shrink: 0;
+      `;
+    } else {
+      icon = document.createElement('span');
+      icon.style.cssText = `
+        font-size: 20px;
+        color: ${this.getColor(type)};
+        font-weight: bold;
+        display: inline-block;
+      `;
+      icon.textContent = this.getIcon(type);
+    }
 
     const text = document.createElement('span');
     text.style.cssText = 'flex: 1; font-size: 14px;';

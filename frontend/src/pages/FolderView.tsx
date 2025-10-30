@@ -3,10 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { DataTable } from '@/components/DataTable';
 import {
   DataRoomLayout,
-  FoldersGrid,
-  FilesGrid,
   DataRoomItem,
   getColumns,
+  FoldersGrid,
+  FilesGrid,
 } from '@/components/DataRoomView';
 import { 
   useDataRoomData, 
@@ -48,7 +48,12 @@ export function FolderView() {
 
   const { handleFileView } = useFileViewer();
   const createFolder = useCreateFolder(id, folderId);
-  const uploadFile = useFileUpload(id, folderId, folderQuery?.data?.data.children);
+  const uploadFile = useFileUpload(
+    id,
+    folderId,
+    folderQuery?.data?.data.children,
+    folderQuery?.data?.data.files
+  );
   const renameItem = useItemRename(id, folderId);
   const { deleteFolderMutation, deleteFileMutation } = useDataRoomMutations({ dataRoomId: id, folderId });
   
@@ -60,17 +65,15 @@ export function FolderView() {
   
   const filteredFolders = useMemo(
     () =>
-      folderQuery?.data?.data.children?.filter((folder: any) =>
-        folder.name.toLowerCase().includes(debouncedSearch.toLowerCase())
-      ) || [],
+      folderQuery?.data?.data.children
+        ?.filter((folder: any) => folder != null && folder.name.toLowerCase().includes(debouncedSearch.toLowerCase())) || [],
     [folderQuery?.data, debouncedSearch]
   );
 
   const filteredFiles = useMemo(
     () =>
-      folderQuery?.data?.data.files?.filter((file: any) =>
-        file.name.toLowerCase().includes(debouncedSearch.toLowerCase())
-      ) || [],
+      folderQuery?.data?.data.files
+        ?.filter((file: any) => file != null && file.name.toLowerCase().includes(debouncedSearch.toLowerCase())) || [],
     [folderQuery?.data, debouncedSearch]
   );
 
@@ -140,6 +143,10 @@ export function FolderView() {
     setItemToDelete(null);
   };
   
+  if (folderQuery?.isError || foldersQuery.isError || filesQuery.isError) {
+    return <div>Error loading folder data.</div>;
+  }
+
   return (
     <>
       <DataRoomLayout
@@ -169,18 +176,15 @@ export function FolderView() {
           <>
             <FoldersGrid
               folders={items.filter((item): item is Extract<DataRoomItem, { type: 'folder' }> => item.type === 'folder')}
-              dataRoomId={id!}
               onRename={handleRename}
               onDelete={handleDelete}
+              onView={handleFolderClick}
             />
             <FilesGrid
               files={items.filter((item): item is Extract<DataRoomItem, { type: 'file' }> => item.type === 'file')}
-              folders={folderQuery?.data?.data.children || []}
-              isSearching={!!debouncedSearch.trim()}
-              searchQuery={debouncedSearch}
-              onView={handleFileClick}
               onRename={handleRename}
               onDelete={handleDelete}
+              onView={handleFileClick}
             />
           </>
         ) : (
@@ -205,12 +209,13 @@ export function FolderView() {
       <UploadFileDialog
         isOpen={uploadFile.isOpen}
         onOpenChange={(open) => !open && uploadFile.close()}
-        selectedFile={uploadFile.selectedFile}
-        fileName={uploadFile.fileName}
-        onFileNameChange={uploadFile.setFileName}
-        onFileSelect={uploadFile.handleFileSelect}
+        selectedFiles={uploadFile.selectedFiles}
+        onFilesSelect={uploadFile.handleFilesSelect}
+        onFileNameChange={uploadFile.handleFileNameChange}
+        onFileRemove={uploadFile.handleFileRemove}
         onSubmit={uploadFile.handleSubmit}
         isPending={uploadFile.isPending}
+        uploadProgress={uploadFile.uploadProgress}
       />
       <RenameDialog
         isOpen={renameItem.isOpen}

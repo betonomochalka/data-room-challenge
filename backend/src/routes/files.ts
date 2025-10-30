@@ -82,6 +82,35 @@ router.put('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response,
         return next(createError('File not found', 404));
     }
 
+    // Check if new name conflicts with existing folder or file in same location
+    if (name && name !== file.name) {
+        const conflictingFolder = await prisma.folder.findFirst({
+            where: {
+                name,
+                parentId: file.folderId,
+                dataRoomId: file.dataRoomId,
+            },
+        });
+
+        if (conflictingFolder) {
+            throw createError('A folder with this name already exists in this location', 409);
+        }
+
+        // Check if another file with the same name exists in the same location
+        const conflictingFile = await prisma.file.findFirst({
+            where: {
+                name,
+                folderId: file.folderId,
+                dataRoomId: file.dataRoomId,
+                id: { not: id },
+            },
+        });
+
+        if (conflictingFile) {
+            throw createError('A file with this name already exists in this location', 409);
+        }
+    }
+
     const updatedFile = await prisma.file.update({
         where: { id },
         data: { name },
@@ -121,6 +150,33 @@ router.post(
 
     try {
       const finalName = name || file.originalname;
+      
+      // Check if a folder with the same name exists in the same location
+      const conflictingFolder = await prisma.folder.findFirst({
+        where: {
+          name: finalName,
+          parentId: folderId || null,
+          dataRoomId,
+        },
+      });
+
+      if (conflictingFolder) {
+        return next(createError('A folder with this name already exists in this location', 409));
+      }
+
+      // Check if a file with the same name already exists in the same location
+      const conflictingFile = await prisma.file.findFirst({
+        where: {
+          name: finalName,
+          folderId: folderId || null,
+          dataRoomId,
+        },
+      });
+
+      if (conflictingFile) {
+        return next(createError('A file with this name already exists in this location', 409));
+      }
+
       const filePath = await uploadFile(file.buffer, finalName, `uploads/${userId}`);
 
       const newFile = await prisma.file.create({

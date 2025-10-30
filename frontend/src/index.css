@@ -37,3 +37,10 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* PDF Preview Styles */
+.pdf-preview-page canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}

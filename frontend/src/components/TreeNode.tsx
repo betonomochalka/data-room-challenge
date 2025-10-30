@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { DataRoomItem } from '@/components/DataRoomView';
-import { ChevronRight, ChevronDown, Folder, File as FileIcon, Edit, Trash2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FileText, Edit, Trash2 } from 'lucide-react';
 import { useFileViewer, useDataRoomData } from '@/hooks';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fileTreeEvents } from '@/lib/events';
@@ -78,9 +78,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({ item, level }) => {
           className="flex items-center flex-grow"
         >
           {isFolder ? (
-            <Folder className="h-4 w-4 mr-2" />
+            <Folder className="h-4 w-4 mr-2 text-yellow-500" />
           ) : (
-            <FileIcon className="h-4 w-4 mr-2" style={{ marginLeft: isFolder ? 0 : '1.25rem' }} />
+            <FileText className="h-4 w-4 mr-2 text-red-500" style={{ marginLeft: isFolder ? 0 : '1.25rem' }} />
           )}
           <span>{item.name}</span>
         </div>
@@ -108,7 +108,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ item, level }) => {
                   }}
                   className="flex items-center px-2 py-1.5 text-sm cursor-pointer hover:bg-accent rounded"
                 >
-                  <FileIcon className="h-4 w-4 mr-2" />
+                  <FileText className="h-4 w-4 mr-2" />
                   <span>View</span>
                 </div>
                 <div className="h-px bg-border my-1" />

@@ -34,16 +34,11 @@ export const useItemRename = (dataRoomId?: string, folderId?: string) => {
     if (!item || !newName.trim()) return;
 
     if (item.type === 'folder') {
-      renameFolderMutation.mutate(
-        { id: item.id, name: newName },
-        { onSuccess: close }
-      );
+      renameFolderMutation.mutate({ id: item.id, name: newName });
     } else {
-      renameFileMutation.mutate(
-        { id: item.id, name: newName },
-        { onSuccess: close }
-      );
+      renameFileMutation.mutate({ id: item.id, name: newName });
     }
+    close();
   };
 
   return {
