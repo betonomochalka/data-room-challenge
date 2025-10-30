@@ -28,6 +28,7 @@ export const useFileUpload = (
   const [completedCount, setCompletedCount] = useState(0);
   const { uploadFileMutation } = useDataRoomMutations({ dataRoomId, folderId });
   const uploadCountRef = useRef({ success: 0, failure: 0, total: 0 });
+  const uploadStatusRef = useRef<Map<string, 'pending' | 'success' | 'error'>>(new Map());
 
   const open = () => setIsOpen(true);
   
@@ -38,6 +39,7 @@ export const useFileUpload = (
     setIsUploading(false);
     setCompletedCount(0);
     uploadCountRef.current = { success: 0, failure: 0, total: 0 };
+    uploadStatusRef.current.clear();
   };
 
   const handleFilesSelect = (files: File[]) => {
@@ -151,27 +153,54 @@ export const useFileUpload = (
 
     // Reset counters and set uploading state
     uploadCountRef.current = { success: 0, failure: 0, total: selectedFiles.length };
+    uploadStatusRef.current.clear();
     setIsUploading(true);
     setCompletedCount(0);
 
-    const handleUploadComplete = () => {
-      const { success, failure, total } = uploadCountRef.current;
-      const completed = success + failure;
+    // Initialize upload progress for all files
+    const initialProgress: { [key: string]: number } = {};
+    selectedFiles.forEach((selectedFile, index) => {
+      const fileKey = `${selectedFile.file.name}-${index}`;
+      initialProgress[fileKey] = 0;
+      uploadStatusRef.current.set(fileKey, 'pending');
+    });
+    setUploadProgress(initialProgress);
+
+    const handleUploadComplete = (fileKey: string, success: boolean) => {
+      // Mark this file as completed
+      uploadStatusRef.current.set(fileKey, success ? 'success' : 'error');
+      
+      if (success) {
+        uploadCountRef.current.success++;
+      } else {
+        uploadCountRef.current.failure++;
+      }
+
+      const { success: totalSuccess, failure: totalFailure, total } = uploadCountRef.current;
+      const completed = totalSuccess + totalFailure;
+      
+      // Update progress to 100% for completed files
+      setUploadProgress((prev) => ({
+        ...prev,
+        [fileKey]: 100,
+      }));
+      
+      // Update completed count
       setCompletedCount(completed);
       
       if (completed === total) {
         setIsUploading(false);
         if (total === 1) {
-          if (success === 1) {
+          if (totalSuccess === 1) {
             toast.success(SUCCESS_MESSAGES.FILE_UPLOADED);
           }
         } else {
-          if (success > 0 && failure === 0) {
-            toast.success(`Successfully uploaded ${success} file${success > 1 ? 's' : ''}`);
-          } else if (success > 0 && failure > 0) {
-            toast.warning(`Uploaded ${success} file${success > 1 ? 's' : ''}, ${failure} failed`);
-          } else if (failure > 0) {
-            toast.error(`Failed to upload ${failure} file${failure > 1 ? 's' : ''}`);
+          if (totalSuccess > 0 && totalFailure === 0) {
+            toast.success(`Successfully uploaded ${totalSuccess} file${totalSuccess > 1 ? 's' : ''}`);
+          } else if (totalSuccess > 0 && totalFailure > 0) {
+            toast.warning(`Uploaded ${totalSuccess} file${totalSuccess > 1 ? 's' : ''}, ${totalFailure} failed`);
+          } else if (totalFailure > 0) {
+            toast.error(`Failed to upload ${totalFailure} file${totalFailure > 1 ? 's' : ''}`);
           }
         }
         
@@ -181,21 +210,26 @@ export const useFileUpload = (
       }
     };
 
-    selectedFiles.forEach((selectedFile) => {
-      uploadFileMutation.mutate({
-        file: selectedFile.file,
-        name: selectedFile.name,
-        folderId: folderId || null,
-      }, {
-        onSuccess: () => {
-          uploadCountRef.current.success++;
-          handleUploadComplete();
-        },
-        onError: () => {
-          uploadCountRef.current.failure++;
-          handleUploadComplete();
-        },
-      });
+    // Upload each file with proper tracking using mutateAsync for reliable callback execution
+    selectedFiles.forEach(async (selectedFile, index) => {
+      const fileKey = `${selectedFile.file.name}-${index}`;
+      
+      // Set initial uploading state (not 0, but a small value to show it's starting)
+      setUploadProgress((prev) => ({
+        ...prev,
+        [fileKey]: prev[fileKey] ?? 0,
+      }));
+      
+      try {
+        await uploadFileMutation.mutateAsync({
+          file: selectedFile.file,
+          name: selectedFile.name,
+          folderId: folderId || null,
+        });
+        handleUploadComplete(fileKey, true);
+      } catch (error) {
+        handleUploadComplete(fileKey, false);
+      }
     });
   };
 
