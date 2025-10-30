@@ -90,6 +90,7 @@ This project is configured for easy deployment to Vercel.
 4.  **Backend Configuration:**
     -   **Root Directory:** `backend`
     -   Vercel will detect the `vercel.json` and configure it as a serverless function.
+    -   **OPTIONS Allow list:** I recommend to add /api. You can find it in project settings.
     -   **Environment Variables:** Add the following environment variables in the Vercel project settings. For more details, see `backend/env.example`.
         ```env
         DATABASE_URL="<your_supabase_connection_string>"
