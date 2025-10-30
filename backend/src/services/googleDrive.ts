@@ -82,7 +82,28 @@ export class GoogleDriveService {
    * Exchange authorization code for tokens and store them
    */
   async handleOAuthCallback(code: string, userId: string): Promise<void> {
+    // Get the redirect URI to ensure consistency
+    const redirectUri = this.getRedirectUri();
+    
+    // Log the redirect URI being used for token exchange
+    console.log('[Google OAuth] Exchanging code for token', {
+      redirectUri: this.oauth2Client.redirectUri,
+      expectedRedirectUri: redirectUri,
+      match: this.oauth2Client.redirectUri === redirectUri,
+    });
+    
     try {
+      // Ensure the OAuth client is using the correct redirect URI
+      // by recreating it if needed (this shouldn't be necessary, but ensures consistency)
+      if (redirectUri && this.oauth2Client.redirectUri !== redirectUri) {
+        console.warn('[Google OAuth] Redirect URI mismatch detected, recreating OAuth client');
+        this.oauth2Client = new google.auth.OAuth2(
+          process.env.GOOGLE_CLIENT_ID,
+          process.env.GOOGLE_CLIENT_SECRET,
+          redirectUri
+        );
+      }
+      
       const { tokens } = await this.oauth2Client.getToken(code);
       
       if (!tokens.access_token) {

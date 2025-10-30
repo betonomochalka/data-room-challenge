@@ -35,8 +35,24 @@ router.get('/auth', authenticateToken, asyncHandler(async (req: AuthenticatedReq
  * Handle OAuth callback from Google (no auth middleware - uses state parameter)
  */
 router.get('/callback', asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  const { code, state } = req.query;
+  const { code, state, error, error_description } = req.query;
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+  // Log the full callback URL and query parameters for debugging
+  console.log('[Google Drive OAuth] Callback received:', {
+    url: req.url,
+    query: req.query,
+    hasCode: !!code,
+    hasState: !!state,
+    error,
+    error_description,
+  });
+
+  // Check if Google returned an error
+  if (error) {
+    console.error('[Google Drive OAuth] Google returned error:', { error, error_description });
+    return res.redirect(`${frontendUrl}?google_drive=error&reason=${error}&details=${encodeURIComponent(error_description as string || '')}`);
+  }
 
   if (!code || typeof code !== 'string') {
     return res.redirect(`${frontendUrl}?google_drive=error&reason=no_code`);
@@ -54,9 +70,18 @@ router.get('/callback', asyncHandler(async (req: AuthenticatedRequest, res: Resp
     
     // Redirect back to frontend with success
     res.redirect(`${frontendUrl}?google_drive=connected`);
-  } catch (error) {
-    console.error('Google Drive OAuth callback error:', error);
-    res.redirect(`${frontendUrl}?google_drive=error&reason=callback_failed`);
+  } catch (error: any) {
+    console.error('[Google Drive OAuth] Callback route error:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack,
+    });
+    
+    // Include error details in redirect for debugging (remove in production if needed)
+    const errorReason = error.message?.includes('redirect_uri_mismatch') 
+      ? 'redirect_uri_mismatch' 
+      : 'callback_failed';
+    res.redirect(`${frontendUrl}?google_drive=error&reason=${errorReason}`);
   }
 }));
 
