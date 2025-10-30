@@ -19,7 +19,7 @@ export const Layout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="bg-card border-b border-border">
+      <header className="sticky top-0 z-50 bg-card border-b border-border">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             <Link to="/" className="flex items-center gap-2 font-bold text-lg sm:text-xl text-primary">
@@ -33,7 +33,7 @@ export const Layout: React.FC = () => {
                 <>
                   <div className="hidden md:flex items-center gap-2 text-sm">
                     <User className="h-4 w-4" />
-                    <span className="max-w-[150px] truncate">{user.name || user.email}</span>
+                    <span className="max-w-[230px] truncate">{user.name || user.email}</span>
                   </div>
                   <Button variant="outline" size="sm" onClick={handleLogout}>
                     <LogOut className="h-4 w-4 sm:mr-2" />
@@ -46,7 +46,7 @@ export const Layout: React.FC = () => {
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex relative overflow-hidden">
         {showFileTree && (
           <>
             {/* Mobile Toggle Button - Full height on left edge */}
@@ -69,14 +69,14 @@ export const Layout: React.FC = () => {
             {/* Sidebar - Desktop always visible, Mobile slide-out */}
             <aside
               className={`
-                w-64 bg-card border-r border-border p-4 flex flex-col
-                md:relative md:translate-x-0
+                w-64 bg-card border-r border-border flex flex-col
+                md:sticky md:top-16 md:h-[100vh] md:translate-x-0
                 fixed top-16 bottom-16 left-0 z-50 transition-transform duration-300
                 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
               `}
             >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">Files</h2>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+                <h2 className="text-lg font-semibold">File Tree</h2>
                 {/* Close button for mobile */}
                 <button
                   onClick={() => setIsSidebarOpen(false)}
@@ -86,7 +86,7 @@ export const Layout: React.FC = () => {
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <div className="overflow-y-auto flex-1">
+              <div className="overflow-y-auto flex-1 p-4">
                 <FileTree />
               </div>
             </aside>

@@ -42,6 +42,7 @@ export const SearchAndActions: React.FC<SearchAndActionsProps> = ({
             if (value) onViewModeChange(value);
           }}
           aria-label="View mode"
+          className="hidden md:flex"
         >
           <ToggleGroupItem value="grid" aria-label="Grid view">
             <LayoutGrid className="h-4 w-4" />

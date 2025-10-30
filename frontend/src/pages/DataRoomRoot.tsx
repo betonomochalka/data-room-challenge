@@ -30,7 +30,13 @@ type ViewMode = 'grid' | 'list';
 export function DataRoomRoot() {
   const { id } = useParams<{ id: string }>();
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    // Default to 'list' on mobile, 'grid' on desktop
+    if (typeof window !== 'undefined') {
+      return window.matchMedia('(min-width: 768px)').matches ? 'grid' : 'list';
+    }
+    return 'grid';
+  });
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   const {
@@ -75,6 +81,7 @@ export function DataRoomRoot() {
     return combinedItems.sort((a, b) => {
         if (a.type === 'folder' && b.type === 'file') return -1;
         if (a.type === 'file' && b.type === 'folder') return 1;
+        
         return a.name.localeCompare(b.name);
     });
   }, [filteredFolders, filteredFiles]);
@@ -118,82 +125,86 @@ export function DataRoomRoot() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <main className="flex-1 p-4 overflow-y-auto">
-        <DataRoomLayout
-          title={dataRoomQuery?.data?.data.name || 'Data Room'}
-          items={items}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          isLoading={isLoading}
-          onCreateFolder={createFolder.open}
-          onUpload={uploadFile.open}
-          itemToDelete={itemToDelete}
-          onConfirmDelete={onConfirmDelete}
-        >
-          {items.length === 0 ? (
-            <EmptyState 
-              isSearching={!!debouncedSearch.trim()} 
-              searchQuery={debouncedSearch}
-              isInFolder={false}
-              onCreateFolder={createFolder.open}
-              onUploadFile={uploadFile.open}
-              onClearSearch={() => setSearchQuery('')}
+    <>
+      <DataRoomLayout
+        title={dataRoomQuery?.data?.data.name || 'Data Room'}
+        items={items}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        isLoading={isLoading}
+        onCreateFolder={createFolder.open}
+        onUpload={uploadFile.open}
+        itemToDelete={itemToDelete}
+        onConfirmDelete={onConfirmDelete}
+      >
+        {items.length === 0 ? (
+          <EmptyState 
+            isSearching={!!debouncedSearch.trim()} 
+            searchQuery={debouncedSearch}
+            isInFolder={false}
+            onCreateFolder={createFolder.open}
+            onUploadFile={uploadFile.open}
+            onClearSearch={() => setSearchQuery('')}
+          />
+        ) : viewMode === 'grid' ? (
+          <>
+            <FoldersGrid
+              folders={items.filter((item): item is Extract<DataRoomItem, { type: 'folder' }> => item.type === 'folder')}
+              dataRoomId={id!}
+              onRename={handleRename}
+              onDelete={handleDelete}
             />
-          ) : viewMode === 'grid' ? (
-            <>
-              <FoldersGrid
-                folders={items.filter((item): item is Extract<DataRoomItem, { type: 'folder' }> => item.type === 'folder')}
-                dataRoomId={id!}
-                onRename={handleRename}
-                onDelete={handleDelete}
-              />
-              <FilesGrid
-                files={items.filter((item): item is Extract<DataRoomItem, { type: 'file' }> => item.type === 'file')}
-                folders={foldersQuery.data?.data || []}
-                isSearching={!!debouncedSearch.trim()}
-                searchQuery={debouncedSearch}
-                onView={handleFileClick}
-                onRename={handleRename}
-                onDelete={handleDelete}
-              />
-            </>
-          ) : (
-            <DataTable columns={columns} data={items} />
-          )}
-        </DataRoomLayout>
+            <FilesGrid
+              files={items.filter((item): item is Extract<DataRoomItem, { type: 'file' }> => item.type === 'file')}
+              folders={foldersQuery.data?.data || []}
+              isSearching={!!debouncedSearch.trim()}
+              searchQuery={debouncedSearch}
+              onView={handleFileClick}
+              onRename={handleRename}
+              onDelete={handleDelete}
+            />
+          </>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={items}
+            onView={handleFileClick}
+            onRename={handleRename}
+            onDelete={handleDelete}
+          />
+        )}
+      </DataRoomLayout>
 
-        <CreateFolderDialog
-          isOpen={createFolder.isOpen}
-          onOpenChange={(open) => !open && createFolder.close()}
-          folderName={createFolder.folderName}
-          onFolderNameChange={createFolder.setFolderName}
-          onSubmit={createFolder.handleSubmit}
-          isPending={createFolder.isPending}
-        />
-        <UploadFileDialog
-          isOpen={uploadFile.isOpen}
-          onOpenChange={(open) => !open && uploadFile.close()}
-          selectedFile={uploadFile.selectedFile}
-          fileName={uploadFile.fileName}
-          onFileNameChange={uploadFile.setFileName}
-          onFileSelect={uploadFile.handleFileSelect}
-          onSubmit={uploadFile.handleSubmit}
-          isPending={uploadFile.isPending}
-        />
-        <RenameDialog
-          isOpen={renameItem.isOpen}
-          onOpenChange={(open) => !open && renameItem.close()}
-          itemType={renameItem.item?.type || null}
-          newName={renameItem.newName}
-          onNewNameChange={renameItem.setNewName}
-          onSubmit={renameItem.handleSubmit}
-          isPending={renameItem.isPending}
-        />
-      </main>
-    </div>
+      <CreateFolderDialog
+        isOpen={createFolder.isOpen}
+        onOpenChange={(open) => !open && createFolder.close()}
+        folderName={createFolder.folderName}
+        onFolderNameChange={createFolder.setFolderName}
+        onSubmit={createFolder.handleSubmit}
+        isPending={createFolder.isPending}
+      />
+      <UploadFileDialog
+        isOpen={uploadFile.isOpen}
+        onOpenChange={(open) => !open && uploadFile.close()}
+        selectedFile={uploadFile.selectedFile}
+        fileName={uploadFile.fileName}
+        onFileNameChange={uploadFile.setFileName}
+        onFileSelect={uploadFile.handleFileSelect}
+        onSubmit={uploadFile.handleSubmit}
+        isPending={uploadFile.isPending}
+      />
+      <RenameDialog
+        isOpen={renameItem.isOpen}
+        onOpenChange={(open) => !open && renameItem.close()}
+        itemType={renameItem.item?.type || null}
+        newName={renameItem.newName}
+        onNewNameChange={renameItem.setNewName}
+        onSubmit={renameItem.handleSubmit}
+        isPending={renameItem.isPending}
+      />
+    </>
   );
 }
 

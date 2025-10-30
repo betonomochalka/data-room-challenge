@@ -19,6 +19,7 @@
     --muted: 0.35 0.02 256;
     --muted-foreground: 0.72 0.02 255;
     --accent: 0.88 0.16 180;
+    --accent-hover: 0.88 0.16 180 / 0.2;
     --accent-foreground: 0.21 0.02 260;
     --destructive: 0.68 0.18 20;
     --destructive-foreground: 0.93 0 0;

@@ -36,13 +36,13 @@ export const FoldersGrid: React.FC<FoldersGridProps> = ({
   }
 
   return (
-    <div onMouseLeave={closeContextMenu}>
+    <div onMouseLeave={closeContextMenu} className="mb-8">
       <h2 className="text-lg font-semibold mb-3">Folders</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {folders.map((folder) => (
           <div key={folder.id} onContextMenu={(e) => handleContextMenu(e, folder)}>
             <Card
-              className="hover:shadow-md transition-shadow"
+              className="hover:shadow-xl transition-shadow"
             >
               <CardContent className="p-4">
                 <div className="flex justify-between items-center">

@@ -46,7 +46,7 @@ export const FilesGrid: React.FC<FilesGridProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {files.map((file) => (
           <div key={file.id} onContextMenu={(e) => handleContextMenu(e, file)}>
-            <Card className="hover:shadow-md transition-shadow">
+            <Card className="hover:shadow-xl transition-shadow">
               <CardContent className="p-4">
                 <div className="flex justify-between items-center">
                   <div 

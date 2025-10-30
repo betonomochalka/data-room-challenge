@@ -6,6 +6,7 @@ import {
   useReactTable,
   getSortedRowModel,
   SortingState,
+  Row,
 } from '@tanstack/react-table';
 import {
   Table,
@@ -15,17 +16,35 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/Table';
+import { DataRoomItem } from './DataRoomView';
+import { Eye, Edit, Trash2 } from 'lucide-react';
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  onView: (item: TData) => void;
+  onRename: (item: TData) => void;
+  onDelete: (item: TData) => void;
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData extends DataRoomItem, TValue>({
   columns,
   data,
+  onView,
+  onRename,
+  onDelete,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number; item: TData | null }>({ x: 0, y: 0, item: null });
+
+  const handleContextMenu = (e: React.MouseEvent, row: Row<TData>) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, item: row.original });
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu({ x: 0, y: 0, item: null });
+  };
 
   const table = useReactTable({
     data,
@@ -39,7 +58,7 @@ export function DataTable<TData, TValue>({
   });
 
   return (
-    <div className="rounded-md border">
+    <div className="rounded-md border" onMouseLeave={closeContextMenu}>
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -65,6 +84,7 @@ export function DataTable<TData, TValue>({
               <TableRow
                 key={row.id}
                 data-state={row.getIsSelected() && 'selected'}
+                onContextMenu={(e) => handleContextMenu(e, row)}
               >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id}>
@@ -82,6 +102,42 @@ export function DataTable<TData, TValue>({
           )}
         </TableBody>
       </Table>
+      {contextMenu.item && (
+        <div
+          className="fixed z-50 bg-popover border border-border rounded-md shadow-md p-1"
+          style={{
+            top: contextMenu.y,
+            left: contextMenu.x,
+          }}
+          onClick={closeContextMenu}
+        >
+          {contextMenu.item.type === 'file' && (
+            <div
+              onClick={() => onView(contextMenu.item!)}
+              className="flex items-center px-2 py-1.5 text-sm cursor-pointer hover:bg-accent rounded"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              <span>View</span>
+            </div>
+          )}
+          {contextMenu.item.type === 'file' && <div className="h-px bg-border my-1" />}
+          <div
+            onClick={() => onRename(contextMenu.item!)}
+            className="flex items-center px-2 py-1.5 text-sm cursor-pointer hover:bg-accent rounded"
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            <span>Rename</span>
+          </div>
+          <div className="h-px bg-border my-1" />
+          <div
+            onClick={() => onDelete(contextMenu.item!)}
+            className="flex items-center px-2 py-1.5 text-sm cursor-pointer hover:bg-accent rounded text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            <span>Delete</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

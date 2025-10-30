@@ -31,7 +31,13 @@ export function FolderView() {
   const { id, folderId } = useParams<{ id: string; folderId: string }>();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    // Default to 'list' on mobile, 'grid' on desktop
+    if (typeof window !== 'undefined') {
+      return window.matchMedia('(min-width: 768px)').matches ? 'grid' : 'list';
+    }
+    return 'grid';
+  });
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   const {
@@ -76,6 +82,7 @@ export function FolderView() {
     return combinedItems.sort((a, b) => {
       if (a.type === 'folder' && b.type === 'file') return -1;
       if (a.type === 'file' && b.type === 'folder') return 1;
+
       return a.name.localeCompare(b.name);
     });
   }, [filteredFolders, filteredFiles]);
@@ -171,7 +178,13 @@ export function FolderView() {
             />
           </>
         ) : (
-          <DataTable columns={columns} data={items} />
+          <DataTable
+            columns={columns}
+            data={items}
+            onView={handleFileClick}
+            onRename={handleRename}
+            onDelete={handleDelete}
+          />
         )}
       </DataRoomLayout>
 
