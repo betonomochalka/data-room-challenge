@@ -4,14 +4,14 @@ A secure file and folder management application for organizing and sharing docum
 
 ## Features
 
-- 🔐 **Secure Authentication**: Google OAuth authentication via Supabase Auth
-- 📁 **Data Room Management**: Create and organize multiple data rooms
-- 🗂️ **Folder Organization**: Create nested folder structures for better organization
-- 📄 **File Management**: Upload, view, rename, and delete files
-- ☁️ **Google Drive Integration**: Import files directly from Google Drive
-- 👁️ **File Previews**: View PDFs and images directly in the browser
-- 🔍 **Search Functionality**: Search files and folders within data rooms
-- 📱 **Responsive Design**: Works seamlessly on desktop and mobile devices
+- **Secure Authentication**: Google OAuth authentication via Supabase Auth
+- **Data Room Management**: Create and organize multiple data rooms
+- **Folder Organization**: Create nested folder structures for better organization
+- **File Management**: Upload, view, rename, and delete files
+- **Google Drive Integration**: Import files directly from Google Drive
+- **File Previews**: View PDFs and images directly in the browser
+- **Search Functionality**: Search files and folders within data rooms
+- **Responsive Design**: Works seamlessly on desktop and mobile devices
 
 ## Tech Stack
 
@@ -78,7 +78,10 @@ For more detailed information see [ARCHITECTURE.md](ARCHITECTURE.md).
     - Create a new project or select an existing one
     - Enable the Google Drive API
     - Create OAuth 2.0 credentials (Web application)
-    - Add authorized redirect URIs: `http://localhost:3001/api/google-drive/callback` (for local) and your production callback URL
+    - **IMPORTANT:** Add authorized redirect URIs in Google Cloud Console:
+      - For local development: `http://localhost:3001/api/google-drive/callback`
+      - For production (Vercel): `https://your-backend-domain.vercel.app/api/google-drive/callback`
+      - The redirect URI in Google Cloud Console must match exactly with `GOOGLE_REDIRECT_URI` environment variable
     - Copy the Client ID and Client Secret to your `backend/.env` file
     - See `backend/.env.example` for the required environment variables
 
@@ -132,7 +135,9 @@ This project is configured for easy deployment to Vercel.
         # Optional: Google Drive Integration
         GOOGLE_CLIENT_ID="<your_google_client_id>"
         GOOGLE_CLIENT_SECRET="<your_google_client_secret>"
-        GOOGLE_REDIRECT_URI="<your_deployed_backend_url>/api/google-drive/callback"
+        GOOGLE_REDIRECT_URI="https://your-backend-domain.vercel.app/api/google-drive/callback"
+        # Note: Replace "your-backend-domain.vercel.app" with your actual Vercel backend domain
+        # IMPORTANT: This exact URL must also be added to Google Cloud Console OAuth credentials
         ```
 
 ## Database Management

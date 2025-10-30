@@ -13,54 +13,120 @@ export class GoogleDriveService {
   private oauth2Client: OAuth2Client;
 
   constructor() {
+    const redirectUri = this.getRedirectUri();
+    
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      throw new Error('Google OAuth credentials are not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.');
+    }
+
+    if (!redirectUri) {
+      throw new Error('Google OAuth redirect URI is not configured. Please set GOOGLE_REDIRECT_URI environment variable.');
+    }
+
     this.oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+      redirectUri
     );
+  }
+
+  /**
+   * Get the redirect URI for OAuth callback
+   * Supports both full URL or constructing from BACKEND_URL environment variable
+   * Sanitizes the value to remove quotes and whitespace that might be included from env vars
+   */
+  private getRedirectUri(): string | undefined {
+    // Use explicit redirect URI if set
+    if (process.env.GOOGLE_REDIRECT_URI) {
+      // Sanitize: remove surrounding quotes (single or double) and trim whitespace
+      const redirectUri = process.env.GOOGLE_REDIRECT_URI
+        .trim()
+        .replace(/^["']|["']$/g, '')
+        .trim();
+      
+      // Log the sanitized redirect URI for debugging (helps identify issues in production)
+      console.log('[Google OAuth] Redirect URI:', redirectUri);
+      
+      return redirectUri;
+    }
+
+    // Try to construct from BACKEND_URL if available
+    if (process.env.BACKEND_URL) {
+      const baseUrl = process.env.BACKEND_URL.trim().replace(/\/$/, ''); // Remove trailing slash
+      const redirectUri = `${baseUrl}/api/google-drive/callback`;
+      console.log('[Google OAuth] Redirect URI (constructed from BACKEND_URL):', redirectUri);
+      return redirectUri;
+    }
+
+    return undefined;
   }
 
   /**
    * Generate the OAuth2 authorization URL
    */
   getAuthUrl(userId: string): string {
-    return this.oauth2Client.generateAuthUrl({
+    const authUrl = this.oauth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: SCOPES,
       prompt: 'consent', // Force consent screen to get refresh token
       state: userId, // Pass userId in state to identify user in callback
     });
+    
+    // Log the auth URL for debugging (helps identify redirect URI issues)
+    console.log('[Google OAuth] Generated auth URL:', authUrl);
+    
+    return authUrl;
   }
 
   /**
    * Exchange authorization code for tokens and store them
    */
   async handleOAuthCallback(code: string, userId: string): Promise<void> {
-    const { tokens } = await this.oauth2Client.getToken(code);
-    
-    if (!tokens.access_token) {
-      throw new Error('Failed to obtain access token');
+    try {
+      const { tokens } = await this.oauth2Client.getToken(code);
+      
+      if (!tokens.access_token) {
+        throw new Error('Failed to obtain access token');
+      }
+
+      const expiresAt = tokens.expiry_date 
+        ? new Date(tokens.expiry_date)
+        : new Date(Date.now() + 3600 * 1000); // Default to 1 hour from now
+
+      // Store or update tokens in database
+      await prisma.googleDriveToken.upsert({
+        where: { userId },
+        create: {
+          userId,
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token || null,
+          expiresAt,
+        },
+        update: {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token || undefined,
+          expiresAt,
+        },
+      });
+    } catch (error: any) {
+      // Enhanced error logging for OAuth issues
+      console.error('[Google OAuth] Callback error:', {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        redirectUri: this.oauth2Client.redirectUri,
+      });
+      
+      // Re-throw with more context if it's a redirect URI mismatch
+      if (error.message?.includes('redirect_uri_mismatch') || error.code === 400) {
+        throw new Error(
+          `Redirect URI mismatch. Expected: ${this.oauth2Client.redirectUri}. ` +
+          `Please ensure this exact URL is registered in Google Cloud Console authorized redirect URIs.`
+        );
+      }
+      
+      throw error;
     }
-
-    const expiresAt = tokens.expiry_date 
-      ? new Date(tokens.expiry_date)
-      : new Date(Date.now() + 3600 * 1000); // Default to 1 hour from now
-
-    // Store or update tokens in database
-    await prisma.googleDriveToken.upsert({
-      where: { userId },
-      create: {
-        userId,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token || null,
-        expiresAt,
-      },
-      update: {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token || undefined,
-        expiresAt,
-      },
-    });
   }
 
   /**
