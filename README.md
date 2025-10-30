@@ -47,20 +47,31 @@ For more detailed information see [ARCHITECTURE.md](ARCHITECTURE.md).
         ```
         You'll need to get your project's `DATABASE_URL` from your Supabase project settings (under Database -> Connection string) and add it to `backend/.env`.
 
-    -   **Frontend:** Create a `.env` file in the `frontend` directory by copying `frontend/.env.example`.
+    -   **Frontend:** Create a `.env.local` file in the `frontend` directory by copying `frontend/env.example`.
         ```bash
-        cp frontend/.env.example frontend/.env
+        cp frontend/env.example frontend/.env.local
         ```
-        You will also need to set up environment variables for the frontend for Supabase authentication. Add your Supabase URL and Anon Key from your Supabase project's API settings to `frontend/.env`.
+        You will also need to set up environment variables for the frontend for Supabase authentication. Add your Supabase URL and Anon Key from your Supabase project's API settings to `frontend/.env.local`.
 
 
-4.  **Apply database schema:**
+4.  **Set up Google Drive integration (Optional):**
+    If you want to enable Google Drive file imports:
+    
+    - Go to [Google Cloud Console](https://console.cloud.google.com)
+    - Create a new project or select an existing one
+    - Enable the Google Drive API
+    - Create OAuth 2.0 credentials (Web application)
+    - Add authorized redirect URIs: `http://localhost:3001/api/google-drive/callback` (for local) and your production callback URL
+    - Copy the Client ID and Client Secret to your `backend/.env` file
+    - See `backend/env.example` for the required environment variables
+
+5.  **Apply database schema:**
     This command will push the schema defined in `backend/prisma/schema.prisma` to your Supabase database.
     ```bash
     npm run db:push
     ```
 
-5.  **Start the development servers:**
+6.  **Start the development servers:**
     This will start both the frontend and backend servers concurrently.
     ```bash
     npm run dev
@@ -99,6 +110,12 @@ This project is configured for easy deployment to Vercel.
         SUPABASE_SERVICE_ROLE_KEY="[YOUR_SUPABASE_SERVICE_ROLE_KEY]"
         SUPABASE_ANON_KEY="[SUPABASE_ANON_KEY]"
         ALLOWED_ORIGINS="<your_deployed_frontend_url>"
+        FRONTEND_URL="<your_deployed_frontend_url>"
+        
+        # Optional: Google Drive Integration
+        GOOGLE_CLIENT_ID="<your_google_client_id>"
+        GOOGLE_CLIENT_SECRET="<your_google_client_secret>"
+        GOOGLE_REDIRECT_URI="<your_deployed_backend_url>/api/google-drive/callback"
         ```
 
 ## Database Management
