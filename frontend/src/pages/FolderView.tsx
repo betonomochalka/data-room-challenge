@@ -93,6 +93,12 @@ export function FolderView() {
     }
   }, [handleFileView]);
 
+  const handleFolderClick = useCallback((item: DataRoomItem) => {
+    if (item.type === 'folder') {
+      navigate(`/data-rooms/${id}/folders/${item.id}`);
+    }
+  }, [navigate, id]);
+
   const handleRename = useCallback((item: DataRoomItem) => {
     renameItem.open({ id: item.id, name: item.name, type: item.type });
   }, [renameItem]);
@@ -117,8 +123,8 @@ export function FolderView() {
   }, [navigate, id, folderQuery?.data?.data]);
 
   const columns = useMemo(
-    () => getColumns(handleFileClick, handleRename, handleDelete),
-    [handleFileClick, handleRename, handleDelete]
+    () => getColumns(handleFileClick, handleRename, handleDelete, handleFolderClick),
+    [handleFileClick, handleRename, handleDelete, handleFolderClick]
   );
 
   const isLoading = folderQuery?.isLoading || foldersQuery.isLoading || filesQuery.isLoading;

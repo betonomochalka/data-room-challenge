@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { DataTable } from '@/components/DataTable';
 import {
   DataRoomLayout,
@@ -29,6 +29,7 @@ type ViewMode = 'grid' | 'list';
 
 export function DataRoomRoot() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     // Default to 'list' on mobile, 'grid' on desktop
@@ -92,6 +93,12 @@ export function DataRoomRoot() {
     }
   }, [handleFileView]);
 
+  const handleFolderClick = useCallback((item: DataRoomItem) => {
+    if (item.type === 'folder') {
+      navigate(`/data-rooms/${id}/folders/${item.id}`);
+    }
+  }, [navigate, id]);
+
   const handleRename = useCallback((item: DataRoomItem) => {
     renameItem.open({ id: item.id, name: item.name, type: item.type });
   }, [renameItem]);
@@ -107,8 +114,8 @@ export function DataRoomRoot() {
   }, [handleRename, handleDelete]);
 
   const columns = useMemo(
-    () => getColumns(handleFileClick, handleRename, handleDelete),
-    [handleFileClick, handleRename, handleDelete]
+    () => getColumns(handleFileClick, handleRename, handleDelete, handleFolderClick),
+    [handleFileClick, handleRename, handleDelete, handleFolderClick]
   );
 
   const isLoading = dataRoomQuery?.isLoading || foldersQuery.isLoading || filesQuery.isLoading;

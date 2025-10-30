@@ -18,7 +18,8 @@ export type DataRoomItem = (IFolder & { type: 'folder', size: null }) | (File & 
 export const getColumns = (
   onView: (item: DataRoomItem) => void,
   onRename: (item: DataRoomItem) => void,
-  onDelete: (item: DataRoomItem) => void
+  onDelete: (item: DataRoomItem) => void,
+  onFolderClick?: (item: DataRoomItem) => void
 ): ColumnDef<DataRoomItem>[] => [
   {
     accessorKey: "name",
@@ -38,8 +39,19 @@ export const getColumns = (
       const isFolder = item.type === 'folder';
       const Icon = isFolder ? Folder : FileIcon;
       
+      const handleClick = () => {
+        if (isFolder && onFolderClick) {
+          onFolderClick(item);
+        } else if (!isFolder) {
+          onView(item);
+        }
+      };
+      
       return (
-        <div className="flex items-center gap-2">
+        <div 
+          className="flex items-center gap-2 cursor-pointer hover:text-foreground"
+          onClick={handleClick}
+        >
           <Icon className="h-4 w-4 text-muted-foreground" />
           <span>{item.name}</span>
         </div>
