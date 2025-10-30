@@ -14,6 +14,7 @@ import {
   useFileUpload,
   useItemRename,
   useFileViewer,
+  useBreadcrumbs,
 } from '@/hooks';
 import { useDataRoomMutations } from '@/hooks/useDataRoomMutations';
 import { EmptyState } from '@/components/DataRoomView/EmptyState';
@@ -126,6 +127,11 @@ export function DataRoomRoot() {
 
   const isLoading = dataRoomQuery?.isLoading || foldersQuery.isLoading || filesQuery.isLoading;
 
+  const breadcrumbs = useBreadcrumbs({
+    dataRoomId: id!,
+    dataRoomName: dataRoomQuery?.data?.data.name,
+  });
+
   const onConfirmDelete = (confirm: boolean) => {
     if (confirm && itemToDelete) {
       if (itemToDelete.type === 'folder') {
@@ -155,6 +161,7 @@ export function DataRoomRoot() {
         onUpload={uploadFile.open}
         itemToDelete={itemToDelete}
         onConfirmDelete={onConfirmDelete}
+        breadcrumbs={breadcrumbs}
       >
         {items.length === 0 ? (
           <EmptyState 

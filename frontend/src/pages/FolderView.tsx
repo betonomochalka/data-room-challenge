@@ -14,6 +14,7 @@ import {
   useCreateFolder,
   useFileUpload,
   useItemRename,
+  useBreadcrumbs,
 } from '@/hooks';
 import { useFileViewer } from '@/hooks/useFileViewer';
 import { useDataRoomMutations } from '@/hooks/useDataRoomMutations';
@@ -132,6 +133,14 @@ export function FolderView() {
 
   const isLoading = folderQuery?.isLoading || foldersQuery.isLoading || filesQuery.isLoading;
 
+  const breadcrumbs = useBreadcrumbs({
+    dataRoomId: id!,
+    currentFolderId: folderId,
+    currentFolderName: folderQuery?.data?.data.name,
+    currentFolderParentId: folderQuery?.data?.data.parentId,
+    allFolders: foldersQuery?.data?.data?.folders || [],
+  });
+
   const onConfirmDelete = (confirm: boolean) => {
     if (confirm && itemToDelete) {
       if (itemToDelete.type === 'folder') {
@@ -162,6 +171,7 @@ export function FolderView() {
         itemToDelete={itemToDelete}
         onConfirmDelete={onConfirmDelete}
         onBackClick={handleBackClick}
+        breadcrumbs={breadcrumbs}
       >
         {items.length === 0 ? (
           <EmptyState 

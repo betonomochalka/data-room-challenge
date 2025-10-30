@@ -12,6 +12,7 @@ import {
 import { DataRoomItem } from '@/components/DataRoomView/columns';
 import { Header } from '@/components/Header';
 import { SearchAndActions } from '@/components/DataRoomView/SearchAndActions';
+import { Breadcrumb, BreadcrumbItem } from '@/components/ui/Breadcrumb';
 
 interface DataRoomLayoutProps {
   title: string;
@@ -27,6 +28,7 @@ interface DataRoomLayoutProps {
   onConfirmDelete: (confirm: boolean) => void;
   children: React.ReactNode;
   onBackClick?: () => void;
+  breadcrumbs?: BreadcrumbItem[];
 }
 
 export const DataRoomLayout: React.FC<DataRoomLayoutProps> = ({
@@ -43,11 +45,17 @@ export const DataRoomLayout: React.FC<DataRoomLayoutProps> = ({
   onConfirmDelete,
   children,
   onBackClick,
+  breadcrumbs,
 }) => {
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
       <div className="container mx-auto px-4 py-4 md:py-6 border-b">
         <Header title={title} onBackClick={onBackClick} />
+        {breadcrumbs && breadcrumbs.length > 0 && (
+          <div className="mt-3 mb-2">
+            <Breadcrumb items={breadcrumbs} />
+          </div>
+        )}
         <SearchAndActions
           searchValue={searchQuery}
           onSearchChange={onSearchChange}
