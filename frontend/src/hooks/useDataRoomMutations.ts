@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '../lib/toast';
 import { getErrorMessage, SUCCESS_MESSAGES, LOADING_MESSAGES } from '../lib/errorMessages';
-import { ApiResponse, DataRoom, Folder, File as FileType } from '../types/index';
 
 interface UseDataRoomMutationsProps {
   dataRoomId?: string;
