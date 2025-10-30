@@ -62,7 +62,10 @@ export function DataRoomRoot() {
   );
 
   const rootFiles = useMemo(
-    () => filesQuery.data?.data?.filter((file: any) => !file.folderId) || [],
+    () => filesQuery.data?.data?.filter((file: any) => {
+      if (file == null) return false;
+      return file.folderId === undefined || file.folderId === null;
+    }) || [],
     [filesQuery.data]
   );
 
@@ -72,7 +75,7 @@ export function DataRoomRoot() {
   const filteredFolders = useMemo(
     () =>
       foldersQuery.data?.data.folders
-        ?.filter((folder: any) => folder != null && !folder.parentId && folder.name.toLowerCase().includes(debouncedSearch.toLowerCase()))
+        ?.filter((folder: any) => folder != null && folder.name != null && !folder.parentId && folder.name.toLowerCase().includes(debouncedSearch.toLowerCase()))
         .map((folder: any) => ({ ...folder, type: 'folder' as const, size: null })) || [],
     [foldersQuery.data, debouncedSearch]
   );
@@ -80,7 +83,11 @@ export function DataRoomRoot() {
   const filteredFiles = useMemo(
     () =>
       filesQuery.data?.data
-        ?.filter((file: any) => file != null && !file.folderId && file.name.toLowerCase().includes(debouncedSearch.toLowerCase()))
+        ?.filter((file: any) => {
+          if (file == null || file.name == null) return false;
+          if (file.folderId !== undefined && file.folderId !== null) return false;
+          return file.name.toLowerCase().includes(debouncedSearch.toLowerCase());
+        })
         .map((file: any) => ({ ...file, type: 'file' as const, size: Number(file.fileSize) || 0 })) || [],
     [filesQuery.data, debouncedSearch]
   );
