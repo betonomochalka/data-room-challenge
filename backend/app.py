@@ -131,12 +131,15 @@ def create_app():
     
     return app
 
+
+# Expose Flask application for serverless/WGSI deployments (e.g., Vercel)
+app = create_app()
+
+
 if __name__ == '__main__':
-    app = create_app()
-    
-    # Initialize database tables
+    # Initialize database tables when running the development server locally
     with app.app_context():
         init_db()
-    
+
     port = int(os.getenv('PORT', 3001))
     app.run(host='0.0.0.0', port=port, debug=Config.NODE_ENV == 'development')
