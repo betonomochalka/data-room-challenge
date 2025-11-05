@@ -17,7 +17,7 @@
  * - We use Google OAuth so users can sign in with their Google account
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -68,16 +68,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const isInitializedRef = useRef(false);
+  const initializationStartedRef = useRef(false);
 
   useEffect(() => {
-    console.log('[AuthContext] useEffect triggered.');
-
     const fetchUser = async () => {
-      console.log('[AuthContext] fetchUser: Attempting to fetch user profile...');
       try {
+        // Ensure token is set before making the request
+        const currentSession = await supabase.auth.getSession();
+        if (currentSession.data.session?.access_token) {
+          setAuthToken(currentSession.data.session.access_token);
+        }
+        
         const { api } = await import('../lib/api'); // Lazy import
         const { data } = await api.get('/auth/me');
-        console.log('[AuthContext] fetchUser: /api/auth/me response', data);
         if (data.success) {
           setUser(data.data);
         } else {
@@ -89,36 +93,88 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
 
-    // Get initial session and user
-    console.log('[AuthContext] Checking initial session...');
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log('[AuthContext] Initial session result:', session);
-      setAuthToken(session?.access_token ?? null); // Set token for API requests
-      setSession(session);
-      if (session) {
-        await fetchUser();
-      } else {
-        setUser(null);
+    const finishInitialization = () => {
+      if (!isInitializedRef.current) {
+        isInitializedRef.current = true;
+        setLoading(false);
       }
-      console.log('[AuthContext] Setting loading to false after initial check.');
-      setLoading(false);
-    });
+    };
+
+    // Set a timeout to ensure loading is always set to false
+    const timeoutId = setTimeout(() => {
+      if (!isInitializedRef.current) {
+        console.error('[AuthContext] Initialization timeout - forcing loading to false');
+        finishInitialization();
+      }
+    }, 30000); // 30 second timeout
+
+    // Prevent multiple initializations
+    if (initializationStartedRef.current) {
+      return;
+    }
+    initializationStartedRef.current = true;
+
+    // Get initial session and user
+    supabase.auth.getSession()
+      .then(async ({ data: { session }, error }) => {
+        clearTimeout(timeoutId);
+        
+        if (error) {
+          console.error('[AuthContext] Error getting session:', error);
+          setUser(null);
+          setSession(null);
+          finishInitialization();
+          return;
+        }
+
+        // Set token BEFORE calling fetchUser
+        setAuthToken(session?.access_token ?? null);
+        setSession(session);
+        
+        if (session) {
+          await fetchUser();
+        } else {
+          setUser(null);
+        }
+        
+        finishInitialization();
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        console.error('[AuthContext] Error getting session:', error);
+        setUser(null);
+        setSession(null);
+        finishInitialization();
+      });
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[AuthContext] onAuthStateChange event: ${event}`, session);
-      setAuthToken(session?.access_token ?? null); // Set token for API requests
+      // Skip INITIAL_SESSION - we handle it in getSession()
+      // INITIAL_SESSION fires synchronously when onAuthStateChange is called,
+      // but we're already handling initialization in getSession()
+      if (event === 'INITIAL_SESSION') {
+        // Don't do anything here - let getSession() handle initialization
+        return;
+      }
+      
+      // For other events, process them normally
+      // Set token BEFORE calling fetchUser
+      setAuthToken(session?.access_token ?? null);
       setSession(session);
       
+      // Handle other auth events
       if (session) {
         await fetchUser();
       } else {
         setUser(null);
       }
-      console.log('[AuthContext] Setting loading to false after auth state change.');
-      setLoading(false);
+      
+      // Only finish initialization if not already done (for SIGNED_IN/SIGNED_OUT during init)
+      if (!isInitializedRef.current) {
+        finishInitialization();
+      }
       
       if (session?.user) {
         const loginToastShown = sessionStorage.getItem('login_toast_shown');
@@ -133,7 +189,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInWithGoogle = async () => {

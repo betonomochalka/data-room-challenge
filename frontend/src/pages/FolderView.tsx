@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { DataTable } from '@/components/DataTable';
 import {
   DataRoomLayout,
@@ -27,12 +27,15 @@ import {
 } from '@/components/Dialogs';
 import { GoogleDriveFilePicker } from '@/components/GoogleDrive';
 import { fileTreeEvents } from '@/lib/events';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { DataRoom } from '@/types';
+import { resolvePathToFolderId, buildFolderUrlFromId } from '@/utils/folderPaths';
 
 type ViewMode = 'grid' | 'list';
 
 export function FolderView() {
-  const { id, folderId } = useParams<{ id: string; folderId: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,22 +50,108 @@ export function FolderView() {
   const [isGoogleDrivePickerOpen, setIsGoogleDrivePickerOpen] = useState(false);
   const { isConnected } = useGoogleDrive();
 
+  // Fetch user's Data Room automatically
+  const { data: dataRoomResponse } = useQuery<{ success: boolean; data: DataRoom }>({
+    queryKey: ['dataRooms'],
+    queryFn: async () => {
+      const response = await api.get('/data-rooms', {
+        params: {
+          // Slim payload: only request essential fields
+          fields: 'id,name',
+        },
+      });
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
+  const dataRoomId = dataRoomResponse?.data?.id;
+
+  // Extract path from URL and resolve to folder ID
+  const folderPath = useMemo(() => {
+    // Remove '/folders' prefix and any leading/trailing slashes
+    const match = location.pathname.match(/^\/folders\/(.+)$/);
+    return match ? match[1] : '';
+  }, [location.pathname]);
+
+  // Fetch all folders for path resolution - enable via useDataRoomData but trigger in background
+  // This allows path resolution while deferring the query load
   const {
     folderQuery,
     foldersQuery,
     filesQuery,
-  } = useDataRoomData({ dataRoomId: id, folderId });
+  } = useDataRoomData({ 
+    dataRoomId, 
+    folderId: undefined, // Will be resolved after allFolders loads
+    enableAllFolders: true // Enable for path resolution
+  });
+
+  // Resolve path to folder ID using allFolders (from foldersQuery)
+  const allFolders = useMemo(() => {
+    return foldersQuery.data?.data?.folders || [];
+  }, [foldersQuery.data?.data?.folders]);
+
+  const folderId = useMemo(() => {
+    if (!folderPath) return undefined;
+    return resolvePathToFolderId(folderPath, allFolders) || undefined;
+  }, [folderPath, allFolders]);
+
+  // After folderId is resolved, fetch folder contents
+  const {
+    folderQuery: resolvedFolderQuery,
+    foldersQuery: resolvedFoldersQuery,
+    filesQuery: resolvedFilesQuery,
+  } = useDataRoomData({ 
+    dataRoomId, 
+    folderId, // Now use resolved folderId
+    enableAllFolders: false // Already have it from above
+  });
+
+  // Use resolved queries if folderId is available, otherwise use initial queries
+  const effectiveFolderQuery = folderId ? resolvedFolderQuery : folderQuery;
+  const effectiveFoldersQuery = folderId ? resolvedFoldersQuery : foldersQuery;
+  const effectiveFilesQuery = folderId ? resolvedFilesQuery : filesQuery;
+
+  // Use allFolders from foldersQuery (always available when at root, or from effectiveFoldersQuery when in folder)
+  const effectiveAllFolders = useMemo(() => {
+    return effectiveFoldersQuery.data?.data?.folders || allFolders;
+  }, [effectiveFoldersQuery.data?.data?.folders, allFolders]);
+
+  // Prefetch allFolders in background after folder loads (for navigation)
+  useEffect(() => {
+    if (dataRoomId && effectiveFolderQuery?.data && !foldersQuery.data) {
+      // Trigger prefetch after folder loads
+      const timer = setTimeout(() => {
+        queryClient.prefetchQuery({
+          queryKey: ['allFolders', dataRoomId],
+          queryFn: async () => {
+            const response = await api.get('/folders', { 
+              params: { 
+                dataRoomId,
+                fields: 'id,name,parentId,dataRoomId,createdAt,updatedAt',
+              },
+            });
+            return response.data;
+          },
+          staleTime: 5 * 60 * 1000,
+        });
+      }, 500); // Wait 500ms after folder loads
+      
+      return () => clearTimeout(timer);
+    }
+  }, [dataRoomId, effectiveFolderQuery?.data, foldersQuery.data, queryClient]);
 
   const { handleFileView } = useFileViewer();
-  const createFolder = useCreateFolder(id, folderId);
+  const createFolder = useCreateFolder(dataRoomId, folderId);
   const uploadFile = useFileUpload(
-    id,
+    dataRoomId,
     folderId,
-    folderQuery?.data?.data.children,
-    folderQuery?.data?.data.files
+    effectiveFolderQuery?.data?.data.children,
+    effectiveFolderQuery?.data?.data.files
   );
-  const renameItem = useItemRename(id, folderId);
-  const { deleteFolderMutation, deleteFileMutation } = useDataRoomMutations({ dataRoomId: id, folderId });
+  const renameItem = useItemRename(dataRoomId, folderId);
+  const { deleteFolderMutation, deleteFileMutation } = useDataRoomMutations({ dataRoomId, folderId });
   
   const [itemToDelete, setItemToDelete] = useState<DataRoomItem | null>(null);
 
@@ -72,16 +161,16 @@ export function FolderView() {
   
   const filteredFolders = useMemo(
     () =>
-      folderQuery?.data?.data.children
+      effectiveFolderQuery?.data?.data.children
         ?.filter((folder: any) => folder != null && folder.name.toLowerCase().includes(debouncedSearch.toLowerCase())) || [],
-    [folderQuery?.data, debouncedSearch]
+    [effectiveFolderQuery?.data, debouncedSearch]
   );
 
   const filteredFiles = useMemo(
     () =>
-      folderQuery?.data?.data.files
+      effectiveFolderQuery?.data?.data.files
         ?.filter((file: any) => file != null && file.name.toLowerCase().includes(debouncedSearch.toLowerCase())) || [],
-    [folderQuery?.data, debouncedSearch]
+    [effectiveFolderQuery?.data, debouncedSearch]
   );
 
   const items = useMemo(() => {
@@ -105,9 +194,10 @@ export function FolderView() {
 
   const handleFolderClick = useCallback((item: DataRoomItem) => {
     if (item.type === 'folder') {
-      navigate(`/data-rooms/${id}/folders/${item.id}`);
+      const folderUrl = buildFolderUrlFromId(item.id, effectiveAllFolders);
+      navigate(folderUrl);
     }
-  }, [navigate, id]);
+  }, [navigate, effectiveAllFolders]);
 
   const handleRename = useCallback((item: DataRoomItem) => {
     renameItem.open({ id: item.id, name: item.name, type: item.type });
@@ -124,27 +214,28 @@ export function FolderView() {
   }, [handleRename, handleDelete]);
 
   const handleBackClick = useCallback(() => {
-    const parentId = folderQuery?.data?.data.parentId;
+    const parentId = effectiveFolderQuery?.data?.data.parentId;
     if (parentId) {
-      navigate(`/data-rooms/${id}/folders/${parentId}`);
+      const parentUrl = buildFolderUrlFromId(parentId, effectiveAllFolders);
+      navigate(parentUrl);
     } else {
-      navigate(`/data-rooms/${id}`);
+      navigate('/');
     }
-  }, [navigate, id, folderQuery?.data?.data]);
+  }, [navigate, effectiveFolderQuery?.data?.data, effectiveAllFolders]);
 
   const columns = useMemo(
     () => getColumns(handleFileClick, handleRename, handleDelete, handleFolderClick),
     [handleFileClick, handleRename, handleDelete, handleFolderClick]
   );
 
-  const isLoading = folderQuery?.isLoading || foldersQuery.isLoading || filesQuery.isLoading;
+  const isLoading = effectiveFolderQuery?.isLoading || effectiveFilesQuery?.isLoading || (!folderId && foldersQuery.isLoading);
 
   const breadcrumbs = useBreadcrumbs({
-    dataRoomId: id!,
+    dataRoomId: dataRoomId!,
     currentFolderId: folderId,
-    currentFolderName: folderQuery?.data?.data.name,
-    currentFolderParentId: folderQuery?.data?.data.parentId,
-    allFolders: foldersQuery?.data?.data?.folders || [],
+    currentFolderName: effectiveFolderQuery?.data?.data.name,
+    currentFolderParentId: effectiveFolderQuery?.data?.data.parentId,
+    allFolders: effectiveAllFolders,
   });
 
   const handleGoogleDriveImport = () => {
@@ -153,14 +244,12 @@ export function FolderView() {
 
   const handleGoogleDriveImportSuccess = useCallback(() => {
     // Batch query invalidations with a delay to avoid rate limiting
-    // React Query batches these automatically, but we add a delay to prevent immediate refetch
     setTimeout(() => {
-      // Batch all invalidations together - React Query will handle batching
       queryClient.invalidateQueries({ queryKey: ['folder', folderId], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['allFolders', id], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['allFiles', id], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['allFolders', dataRoomId], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['allFiles', dataRoomId], exact: false });
     }, 500);
-  }, [queryClient, id, folderId]);
+  }, [queryClient, dataRoomId, folderId]);
 
   const onConfirmDelete = (confirm: boolean) => {
     if (confirm && itemToDelete) {
@@ -173,14 +262,14 @@ export function FolderView() {
     setItemToDelete(null);
   };
   
-  if (folderQuery?.isError || foldersQuery.isError || filesQuery.isError) {
+  if (effectiveFolderQuery?.isError || (!folderId && foldersQuery.isError) || effectiveFilesQuery?.isError || !dataRoomId) {
     return <div>Error loading folder data.</div>;
   }
 
   return (
     <>
       <DataRoomLayout
-        title={folderQuery?.data?.data.name || 'Folder'}
+        title={effectiveFolderQuery?.data?.data.name || 'Folder'}
         items={items}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
@@ -263,11 +352,10 @@ export function FolderView() {
       <GoogleDriveFilePicker
         open={isGoogleDrivePickerOpen}
         onOpenChange={setIsGoogleDrivePickerOpen}
-        dataRoomId={id}
+        dataRoomId={dataRoomId}
         folderId={folderId}
         onImportSuccess={handleGoogleDriveImportSuccess}
       />
     </>
   );
 }
-

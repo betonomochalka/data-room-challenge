@@ -21,7 +21,7 @@ export const OfficePreview: React.FC<OfficePreviewProps> = ({
   const [viewerType, setViewerType] = useState<'office' | 'google'>('office');
   const isExcel = mimeType.includes('spreadsheet') || mimeType.includes('excel');
   const Icon = isExcel ? FileSpreadsheet : FileText;
-  const color = isExcel ? 'text-green-500' : 'text-blue-500';
+  const color = isExcel ? 'text-foreground' : 'text-foreground';
 
   // Try Microsoft Office Online viewer first
   const officeViewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;

@@ -24,7 +24,7 @@ const DataRoomItemView: React.FC<DataRoomItemViewProps> = React.memo(({ item, on
 
   // Get appropriate icon and color for files
   const { Icon, color } = isFolder 
-    ? { Icon: Folder, color: 'text-yellow-500' }
+    ? { Icon: Folder, color: 'text-foreground' }
     : getFileIconAndColor(item.mimeType, item.name);
 
   // Determine file type for preview
@@ -96,7 +96,7 @@ const DataRoomItemView: React.FC<DataRoomItemViewProps> = React.memo(({ item, on
       <div 
         ref={itemRef}
         onDoubleClick={handleDoubleClick} 
-        className="cursor-pointer p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-transparent hover:border-border"
+        className="cursor-pointer p-2 rounded-lg hover:bg-muted transition-colors border border-transparent hover:border-border"
       >
         <div className="flex items-center justify-center h-32 bg-muted rounded-md overflow-hidden relative group">
           {isPDF && fileUrl ? (

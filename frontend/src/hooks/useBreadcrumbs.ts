@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { BreadcrumbItem } from '@/components/ui/Breadcrumb';
 import { Folder } from '@/types';
+import { buildFolderUrlFromId } from '@/utils/folderPaths';
 
 interface UseBreadcrumbsProps {
   dataRoomId: string;
@@ -29,7 +30,7 @@ export const useBreadcrumbs = ({
     breadcrumbs.push({
       id: dataRoomId,
       name: dataRoomName || 'Data Room',
-      path: `/data-rooms/${dataRoomId}`,
+      path: '/',
     });
 
     // If we're in a folder, build the path from root to current folder
@@ -50,7 +51,6 @@ export const useBreadcrumbs = ({
       while (folder && depth < MAX_DEPTH) {
         // Check for circular reference
         if (visited.has(folder.id)) {
-          console.warn('Circular reference detected in folder hierarchy');
           break;
         }
         
@@ -66,12 +66,12 @@ export const useBreadcrumbs = ({
         }
       }
 
-      // Convert path to breadcrumb items
+      // Convert path to breadcrumb items with paths instead of IDs
       path.forEach(folder => {
         breadcrumbs.push({
           id: folder.id,
           name: folder.name,
-          path: `/data-rooms/${dataRoomId}/folders/${folder.id}`,
+          path: buildFolderUrlFromId(folder.id, allFolders),
         });
       });
     } else if (currentFolderId && currentFolderName) {
@@ -79,7 +79,7 @@ export const useBreadcrumbs = ({
       breadcrumbs.push({
         id: currentFolderId,
         name: currentFolderName,
-        path: `/data-rooms/${dataRoomId}/folders/${currentFolderId}`,
+        path: buildFolderUrlFromId(currentFolderId, allFolders),
       });
     }
 

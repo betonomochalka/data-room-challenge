@@ -1,26 +1,20 @@
-type EventHandler = (data?: any) => void;
+import { EventEmitter } from 'eventemitter3';
 
-class EventEmitter {
-  private events: { [key: string]: EventHandler[] } = {};
-
-  subscribe(event: string, handler: EventHandler): () => void {
-    if (!this.events[event]) {
-      this.events[event] = [];
-    }
-    this.events[event].push(handler);
-
-    // Return an unsubscribe function
+// Create a typed event emitter for file tree events
+class FileTreeEventEmitter extends EventEmitter {
+  // Wrapper to match original API - subscribe returns unsubscribe function
+  subscribe(event: string, handler: (...args: any[]) => void): () => void {
+    this.on(event, handler);
+    // Return unsubscribe function
     return () => {
-      this.events[event] = this.events[event].filter(h => h !== handler);
+      this.off(event, handler);
     };
   }
 
-  publish(event: string, data?: any): void {
-    const handlers = this.events[event];
-    if (handlers) {
-      handlers.forEach(handler => handler(data));
-    }
+  // Alias for publish -> emit
+  publish(event: string, ...args: any[]): void {
+    this.emit(event, ...args);
   }
 }
 
-export const fileTreeEvents = new EventEmitter();
+export const fileTreeEvents = new FileTreeEventEmitter();

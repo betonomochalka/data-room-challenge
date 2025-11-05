@@ -1,20 +1,45 @@
 import React, { useState } from 'react';
-import { Link, Outlet, useNavigate, useParams } from 'react-router-dom';
+import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from './ui/Button';
 import { FolderOpen, LogOut, User, ChevronRight, X } from 'lucide-react';
 import FileTree from './FileTree';
+import { useGoogleDrive } from '../hooks/useGoogleDrive';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/AlertDialog';
 
 export const Layout: React.FC = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const params = useParams();
-  const showFileTree = params.id;
+  const showFileTree = true; // Always show file tree now
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { isConnected, connect, disconnect, isDisconnecting } = useGoogleDrive();
+  const [isDisconnectDialogOpen, setIsDisconnectDialogOpen] = useState(false);
 
   const handleLogout = async () => {
     await signOut();
     navigate('/login');
+  };
+
+  const handleGoogleDriveClick = () => {
+    if (isConnected) {
+      setIsDisconnectDialogOpen(true);
+    } else {
+      connect();
+    }
+  };
+
+  const handleDisconnect = () => {
+    disconnect();
+    setIsDisconnectDialogOpen(false);
   };
 
   return (
@@ -35,9 +60,45 @@ export const Layout: React.FC = () => {
                     <User className="h-4 w-4" />
                     <span className="max-w-[230px] truncate">{user.name || user.email}</span>
                   </div>
+                  
+                  {/* Google Drive Button */}
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleGoogleDriveClick}
+                    disabled={isDisconnecting}
+                  >
+                    <img 
+                      src="/drive_logo.svg" 
+                      alt="Google Drive" 
+                      className="h-4 w-4 sm:mr-2"
+                    />
+                    <span className="hidden sm:inline">{isConnected ? 'Connected' : 'Connect'}</span>
+                  </Button>
+
+                  {/* Disconnect Dialog */}
+                  <AlertDialog open={isDisconnectDialogOpen} onOpenChange={setIsDisconnectDialogOpen}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Disconnect Google Drive?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to disconnect Google Drive? You won't be able to import files from Google Drive until you reconnect.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setIsDisconnectDialogOpen(false)}>
+                          No
+                        </AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDisconnect}>
+                          Yes
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+
                   <Button variant="outline" size="sm" onClick={handleLogout}>
                     <LogOut className="h-4 w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Logout</span>
+                    <span className="hidden sm:inline">Log Out</span>
                   </Button>
                 </>
               )}

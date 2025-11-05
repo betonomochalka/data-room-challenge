@@ -6,26 +6,37 @@
 
 @layer base {
   :root {
-    --background: 0.21 0.02 260;
-    --foreground: 0.93 0 0;
-    --card: 0.24 0.02 258;
-    --card-foreground: 0.93 0 0;
-    --popover: 0.24 0.02 258;
-    --popover-foreground: 0.93 0 0;
-    --primary: 0.88 0.16 180;
-    --primary-foreground: 0.21 0.02 260;
-    --secondary: 0.58 0.02 255;
-    --secondary-foreground: 0.93 0 0;
-    --muted: 0.35 0.02 256;
-    --muted-foreground: 0.72 0.02 255;
-    --accent: 0.88 0.16 180;
-    --accent-hover: 0.88 0.16 180 / 0.2;
-    --accent-foreground: 0.21 0.02 260;
-    --destructive: 0.68 0.18 20;
-    --destructive-foreground: 0.93 0 0;
-    --border: 0.35 0.02 256;
-    --input: 0.35 0.02 256;
-    --ring: 0.88 0.16 180;
+    /* Custom Dark Theme Palette */
+    --bg-primary: #212529;
+    --bg-secondary: #2d3238;
+    --bg-tertiary: #495057;
+    --border: #6c757d;
+    --text-primary: #F8F9FA;
+    --text-secondary: #DEE2E6;
+    --text-muted: #ADB5BD;
+    --accent: #F8F9FA;
+
+    /* Map to Tailwind variables */
+    --background: 0.23 0.003 0; /* #212529 in oklch - основной фон */
+    --foreground: 0.97 0.002 0; /* #F8F9FA in oklch - основной текст */
+    --card: 0.27 0.004 0; /* #2d3238 in oklch - карточки, сайдбар */
+    --card-foreground: 0.97 0.002 0; /* #F8F9FA in oklch */
+    --popover: 0.27 0.004 0; /* #2d3238 in oklch */
+    --popover-foreground: 0.97 0.002 0; /* #F8F9FA in oklch */
+    --primary: 0.97 0.002 0; /* #F8F9FA in oklch - акцентный цвет */
+    --primary-foreground: 0.23 0.003 0; /* #212529 in oklch */
+    --secondary: 0.27 0.004 0; /* #2d3238 in oklch */
+    --secondary-foreground: 0.92 0.002 0; /* #DEE2E6 in oklch - второстепенный текст */
+    --muted: 0.38 0.003 0; /* #495057 in oklch - hover состояния */
+    --muted-foreground: 0.76 0.003 0; /* #ADB5BD in oklch - приглушенный текст */
+    --accent: 0.97 0.002 0; /* #F8F9FA in oklch - акцентный цвет */
+    --accent-hover: 0.92 0.002 0; /* #DEE2E6 in oklch - hover акцента */
+    --accent-foreground: 0.23 0.003 0; /* #212529 in oklch */
+    --destructive: 0.68 0.18 20; /* Keep red for destructive actions */
+    --destructive-foreground: 0.97 0.002 0; /* #F8F9FA in oklch */
+    --border: 0.51 0.003 0; /* #6c757d in oklch - границы */
+    --input: 0.51 0.003 0; /* #6c757d in oklch */
+    --ring: 0.97 0.002 0; /* #F8F9FA in oklch - акцент для focus ring */
     --radius: 0.5rem;
   }
 

@@ -3,6 +3,8 @@
  * Centralizes file type validation logic to prevent duplication
  */
 
+import bytes from 'bytes';
+
 export const ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/jpg',
@@ -63,14 +65,10 @@ export function validateFileSize(fileSize: number, maxSize: number = MAX_FILE_SI
 }
 
 /**
- * Format bytes to human readable string
+ * Format bytes to human readable string using bytes package
  */
-function formatBytes(bytes: number, decimals = 2): string {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+function formatBytes(bytesValue: number, decimals = 2): string {
+  const result = bytes(bytesValue, { decimalPlaces: decimals });
+  return result || '0 Bytes';
 }
 

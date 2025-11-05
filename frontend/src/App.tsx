@@ -19,6 +19,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
 import { PrivateRoute } from './components/PrivateRoute';
@@ -32,7 +33,6 @@ import { PrivateRoute } from './components/PrivateRoute';
  * The .then() part extracts the named export from each module.
  */
 const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
-const DataRooms = lazy(() => import('./pages/DataRooms').then(module => ({ default: module.DataRooms })));
 const DataRoomRoot = lazy(() => import('./pages/DataRoomRoot').then(module => ({ default: module.DataRoomRoot })));
 const FolderView = lazy(() => import('./pages/FolderView').then(module => ({ default: module.FolderView })));
 
@@ -96,9 +96,8 @@ function App() {
               
               {/* PROTECTED ROUTES - Only logged-in users can access these */}
               <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
-                <Route path="/" element={<DataRooms />} />
-                <Route path="/data-rooms/:id" element={<DataRoomRoot />} />
-                <Route path="/data-rooms/:id/folders/:folderId" element={<FolderView />} />
+                <Route path="/" element={<DataRoomRoot />} />
+                <Route path="/folders/*" element={<FolderView />} />
               </Route>
 
               {/* CATCH-ALL ROUTE - Redirects unknown URLs to home page */}
@@ -106,6 +105,8 @@ function App() {
             </Routes>
           </Suspense>
         </Router>
+        {/* Toast notifications */}
+        <Toaster position="top-right" />
       </AuthProvider>
     </QueryClientProvider>
   );

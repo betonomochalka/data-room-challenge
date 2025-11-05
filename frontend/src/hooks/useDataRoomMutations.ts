@@ -2,7 +2,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '../lib/toast';
 import { getErrorMessage, SUCCESS_MESSAGES } from '../lib/errorMessages';
-import { File, FolderWithChildren } from '@/types';
+import {
+  addFolderToCache,
+  addFileToCache,
+} from '../utils/cacheHelpers';
+import { Folder, File as FileType } from '../types';
 
 interface UseDataRoomMutationsProps {
   dataRoomId?: string;
@@ -15,361 +19,708 @@ interface UseDataRoomMutationsProps {
 export const useDataRoomMutations = ({ dataRoomId, folderId }: UseDataRoomMutationsProps) => {
   const queryClient = useQueryClient();
 
-  const invalidateQueries = () => {
-    queryClient.invalidateQueries({ queryKey: ['dataRoom', dataRoomId] });
-    queryClient.invalidateQueries({ queryKey: ['allFolders', dataRoomId] });
-    queryClient.invalidateQueries({ queryKey: ['allFiles', dataRoomId] });
-    if (folderId) {
-      queryClient.invalidateQueries({ queryKey: ['folder', folderId] });
-    }
-  };
-
   const createFolderMutation = useMutation({
     mutationFn: async (name: string) => {
-      const response = await api.post('/folders', {
-        name,
-        dataRoomId,
-        parentId: folderId || null,
-      });
-      return response.data.data;
+      performance.mark('folder-create-start');
+      try {
+        const response = await api.post('/folders', {
+          name,
+          dataRoomId,
+          parentId: folderId || null,
+        });
+        const parentId = folderId || null;
+        const newFolder = response.data.data as Folder;
+        return { folder: newFolder, parentId };
+      } finally {
+        performance.mark('folder-create-end');
+        performance.measure('folder-create', 'folder-create-start', 'folder-create-end');
+        if (process.env.NODE_ENV === 'development') {
+          const measure = performance.getEntriesByName('folder-create', 'measure')[0];
+          if (measure) {
+            console.log(`[Performance] folder-create: ${measure.duration.toFixed(2)}ms`);
+          }
+        }
+      }
     },
-    onMutate: async (newFolderName: string) => {
-      const viewQueryKey = folderId ? ['folder', folderId] : ['dataRoom', dataRoomId];
-      
-      await queryClient.cancelQueries({ queryKey: ['allFolders', dataRoomId] });
-      await queryClient.cancelQueries({ queryKey: viewQueryKey, exact: false });
-
-      const previousFolders = queryClient.getQueryData(['allFolders', dataRoomId]);
-      const previousView = queryClient.getQueryData(viewQueryKey);
-      
-      const optimisticFolder: Partial<FolderWithChildren> & { id: string, isOptimistic: boolean } = {
-        id: generateTemporaryId(),
-        name: newFolderName,
-        dataRoomId: dataRoomId,
-        parentId: folderId || null,
-        children: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isOptimistic: true,
-      };
-
-      // Update allFolders query
-      queryClient.setQueryData(['allFolders', dataRoomId], (old: any) =>
-        old ? { 
-          ...old, 
-          data: { 
-            ...old.data, 
-            folders: [...(old.data.folders || []).filter((f: any) => f != null), optimisticFolder] 
-          } 
-        } : { data: { folders: [optimisticFolder] } }
-      );
-
-      // Update dataRoom/folder view query
-      queryClient.setQueryData(viewQueryKey, (old: any) => {
-        if (!old) return old;
-        const newFolders = folderId 
-          ? [...(old.data.children || []).filter((f: any) => f != null), optimisticFolder] 
-          : [...(old.data.folders || []).filter((f: any) => f != null), optimisticFolder];
-        
-        const updatedData = folderId
-          ? { ...old.data, children: newFolders }
-          : { ...old.data, folders: newFolders };
-
-        return { ...old, data: updatedData };
-      });
-
-      return { previousFolders, previousView, optimisticFolder };
-    },
-    onSuccess: (savedFolder, variables, context) => {
+    onSuccess: (data, _variables) => {
       toast.success(SUCCESS_MESSAGES.FOLDER_CREATED);
-      queryClient.setQueryData(['allFolders', dataRoomId], (old: any) => {
-        if (!old || !old.data || !old.data.folders) return old;
-        const newFolders = old.data.folders
-          .filter((folder: FolderWithChildren) => folder != null)
-          .map((folder: FolderWithChildren) => 
-            folder.id === context?.optimisticFolder.id ? savedFolder : folder
-          );
-        return { ...old, data: { ...old.data, folders: newFolders } };
+      
+      // Surgical cache update - add folder to parent cache
+      if (dataRoomId) {
+        addFolderToCache(queryClient, dataRoomId, data.parentId, data.folder);
+      }
+      
+      // Mark queries as stale and refetch active queries
+      // Surgical cache updates above handle immediate UI updates
+      // Refetch ensures data consistency across all components (including FileTree)
+      queryClient.invalidateQueries({ 
+        queryKey: ['folder'], 
+        exact: false,
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['dataRoom'], 
+        exact: false,
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['dataRooms'],
+      });
+      // Invalidate allFolders and allFiles queries used by FileTree
+      queryClient.invalidateQueries({ 
+        queryKey: ['allFolders'],
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['allFiles'],
       });
     },
-    onError: (err, variables, context) => {
+    onError: (err) => {
       toast.error(getErrorMessage(err));
-      if (context?.previousFolders) {
-        queryClient.setQueryData(['allFolders', dataRoomId], context.previousFolders);
-      }
-      if (context?.previousView) {
-        const viewQueryKey = folderId ? ['folder', folderId] : ['dataRoom', dataRoomId];
-        queryClient.setQueryData(viewQueryKey, context.previousView);
-      }
     },
-    onSettled: () => {
-      invalidateQueries();
-    }
   });
 
   const deleteFolderMutation = useMutation({
     mutationFn: async (folderIdToDelete: string) => {
+      performance.mark('folder-delete-start');
       try {
+        // Fetch folder info before deletion to get parent ID for cache update
+        const folderResponse = await api.get(`/folders/${folderIdToDelete}/contents`);
+        const parentId = folderResponse.data?.data?.folder?.parentId || null;
         await api.delete(`/folders/${folderIdToDelete}`);
-        return { id: folderIdToDelete };
-      } catch (error: any) {
-        throw error;
+        return { id: folderIdToDelete, parentId };
+      } finally {
+        performance.mark('folder-delete-end');
+        performance.measure('folder-delete', 'folder-delete-start', 'folder-delete-end');
+        if (process.env.NODE_ENV === 'development') {
+          const measure = performance.getEntriesByName('folder-delete', 'measure')[0];
+          if (measure) {
+            console.log(`[Performance] folder-delete: ${measure.duration.toFixed(2)}ms`);
+          }
+        }
       }
     },
     onMutate: async (folderIdToDelete: string) => {
-      await queryClient.cancelQueries({ queryKey: ['allFolders', dataRoomId] });
+      // Cancel outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ['folder'], exact: false });
+      await queryClient.cancelQueries({ queryKey: ['dataRoom'], exact: false });
+      await queryClient.cancelQueries({ queryKey: ['allFolders'] });
 
-      const previousFolders = queryClient.getQueryData(['allFolders', dataRoomId]);
+      // Get current folder data to determine parentId
+      // Try to get from allFolders cache first (more reliable)
+      let parentId: string | null = null;
+      if (dataRoomId) {
+        const allFoldersData = queryClient.getQueryData(['allFolders', dataRoomId]) as any;
+        const folder = allFoldersData?.data?.folders?.find((f: Folder) => f.id === folderIdToDelete);
+        if (folder?.parentId !== undefined) {
+          parentId = folder.parentId;
+        }
+      }
+      
+      // Fallback: try to get from folder query if exists
+      if (parentId === null) {
+        const folderQuery = queryClient.getQueryData(['folder', folderIdToDelete]) as any;
+        parentId = folderQuery?.data?.data?.parentId || null;
+      }
 
-      queryClient.setQueryData(['allFolders', dataRoomId], (old: any) => {
-        if (!old || !old.data || !old.data.folders) return old;
-        const newFolders = old.data.folders.filter((folder: FolderWithChildren) => folder != null && folder.id !== folderIdToDelete);
-        return { ...old, data: { ...old.data, folders: newFolders } };
-      });
+      // Optimistically update active view cache (currently open folder/dataRoom)
+      if (parentId) {
+        queryClient.setQueryData(['folder', parentId], (oldData: any) => {
+          if (!oldData?.data?.data) return oldData;
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data.data,
+              children: (oldData.data.data.children || []).filter(
+                (f: Folder) => f.id !== folderIdToDelete
+              ),
+            },
+          };
+        });
+      } else if (dataRoomId) {
+        queryClient.setQueryData(['dataRoom', dataRoomId], (oldData: any) => {
+          if (!oldData?.data?.data) return oldData;
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data.data,
+              folders: (oldData.data.data.folders || []).filter(
+                (f: Folder) => f.id !== folderIdToDelete
+              ),
+            },
+          };
+        });
+      }
 
-      return { previousFolders };
+      // Optimistically update allFolders list cache (for FileTree)
+      if (dataRoomId) {
+        queryClient.setQueryData(['allFolders', dataRoomId], (oldData: any) => {
+          if (!oldData || !oldData.data) return oldData;
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data,
+              folders: (oldData.data.folders || []).filter(
+                (f: Folder) => f != null && f.id !== folderIdToDelete
+              ),
+            },
+          };
+        });
+      }
+
+      return { parentId };
     },
-    onSuccess: () => {
+    onSuccess: (data, _variables, context) => {
       toast.success(SUCCESS_MESSAGES.FOLDER_DELETED);
-    },
-    onError: (err, variables, context) => {
-      toast.error(getErrorMessage(err));
-      if (context?.previousFolders) {
-        queryClient.setQueryData(['allFolders', dataRoomId], context.previousFolders);
+      
+      // Optimistic update already handled in onMutate - state is already correct
+      // Mark inactive queries as stale, then optionally refetch active queries for fresh data
+      if (context?.parentId !== undefined && dataRoomId) {
+        const viewQueryKey = context.parentId ? ['folder', context.parentId] : ['dataRoom', dataRoomId];
+        queryClient.invalidateQueries({ 
+          queryKey: viewQueryKey,
+          refetchType: 'inactive', // Mark inactive queries as stale, don't refetch yet
+        });
+        
+        // Optionally refetch active queries to keep data fresh without flooding network
+        queryClient.refetchQueries({ 
+          queryKey: viewQueryKey,
+          type: 'active', // Only refetch currently active queries
+        });
       }
     },
-    onSettled: () => {
-      invalidateQueries();
-    }
+    onError: (err, _variables, context) => {
+      toast.error(getErrorMessage(err));
+      
+      // Rollback optimistic update on error
+      if (context?.parentId !== undefined && dataRoomId) {
+        // Refetch the parent folder/dataRoom to restore correct state
+        const viewQueryKey = context.parentId ? ['folder', context.parentId] : ['dataRoom', dataRoomId];
+        queryClient.invalidateQueries({ 
+          queryKey: viewQueryKey,
+        });
+        // Refetch allFolders to restore correct state
+        queryClient.invalidateQueries({ 
+          queryKey: ['allFolders', dataRoomId],
+        });
+      }
+    },
   });
 
   const deleteFileMutation = useMutation({
     mutationFn: async (fileId: string) => {
+      performance.mark('file-delete-start');
       try {
         await api.delete(`/files/${fileId}`);
         return { id: fileId };
-      } catch (error: any) {
-        throw error;
+      } finally {
+        performance.mark('file-delete-end');
+        performance.measure('file-delete', 'file-delete-start', 'file-delete-end');
+        if (process.env.NODE_ENV === 'development') {
+          const measure = performance.getEntriesByName('file-delete', 'measure')[0];
+          if (measure) {
+            console.log(`[Performance] file-delete: ${measure.duration.toFixed(2)}ms`);
+          }
+        }
       }
     },
     onMutate: async (fileId: string) => {
-      await queryClient.cancelQueries({ queryKey: ['allFiles', dataRoomId] });
+      // Cancel outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ['folder'], exact: false });
+      await queryClient.cancelQueries({ queryKey: ['dataRoom'], exact: false });
+      await queryClient.cancelQueries({ queryKey: ['allFiles'] });
 
-      const previousFiles = queryClient.getQueryData(['allFiles', dataRoomId]);
+      // Get current file data to determine folderId
+      // Try to find file in cache to get folderId
+      let fileFolderId: string | null = folderId || null;
+      
+      // Try to get from allFiles cache
+      if (dataRoomId) {
+        const allFilesData = queryClient.getQueryData(['allFiles', dataRoomId]) as any;
+        const file = allFilesData?.data?.find((f: FileType) => f.id === fileId);
+        if (file?.folderId !== undefined) {
+          fileFolderId = file.folderId;
+        }
+      }
 
-      queryClient.setQueryData(['allFiles', dataRoomId], (old: any) => {
-        if (!old || !old.data) return old;
-        const newFiles = old.data.filter((file: File) => file != null && file.id !== fileId);
-        return { ...old, data: newFiles };
-      });
+      // Optimistically update active view cache (currently open folder/dataRoom)
+      if (fileFolderId) {
+        queryClient.setQueryData(['folder', fileFolderId], (oldData: any) => {
+          if (!oldData?.data?.data) return oldData;
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data.data,
+              files: (oldData.data.data.files || []).filter(
+                (f: FileType) => f.id !== fileId
+              ),
+            },
+          };
+        });
+      } else if (dataRoomId) {
+        queryClient.setQueryData(['dataRoom', dataRoomId], (oldData: any) => {
+          if (!oldData?.data?.data) return oldData;
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data.data,
+              files: (oldData.data.data.files || []).filter(
+                (f: FileType) => f.id !== fileId
+              ),
+            },
+          };
+        });
+      }
 
-      return { previousFiles };
+      // Optimistically update allFiles list cache (for FileTree)
+      if (dataRoomId) {
+        queryClient.setQueryData(['allFiles', dataRoomId], (oldData: any) => {
+          if (!oldData || !oldData.data) return oldData;
+          return {
+            ...oldData,
+            data: (oldData.data || []).filter(
+              (f: FileType) => f != null && f.id !== fileId
+            ),
+          };
+        });
+      }
+
+      return { folderId: fileFolderId };
     },
-    onSuccess: () => {
+    onSuccess: (data, _variables, context) => {
       toast.success(SUCCESS_MESSAGES.FILE_DELETED);
-    },
-    onError: (err, variables, context) => {
-      toast.error(getErrorMessage(err));
-      if (context?.previousFiles) {
-        queryClient.setQueryData(['allFiles', dataRoomId], context.previousFiles);
+      
+      // Optimistic update already handled in onMutate - state is already correct
+      // Mark inactive queries as stale, then optionally refetch active queries for fresh data
+      if (context?.folderId !== undefined && dataRoomId) {
+        const viewQueryKey = context.folderId ? ['folder', context.folderId] : ['dataRoom', dataRoomId];
+        queryClient.invalidateQueries({ 
+          queryKey: viewQueryKey,
+          refetchType: 'inactive', // Mark inactive queries as stale, don't refetch yet
+        });
+        
+        // Optionally refetch active queries to keep data fresh without flooding network
+        queryClient.refetchQueries({ 
+          queryKey: viewQueryKey,
+          type: 'active', // Only refetch currently active queries
+        });
       }
     },
-    onSettled: () => {
-      invalidateQueries();
-    }
+    onError: (err, _variables, context) => {
+      toast.error(getErrorMessage(err));
+      
+      // Rollback optimistic update on error
+      if (context?.folderId !== undefined && dataRoomId) {
+        // Refetch the folder/dataRoom to restore correct state
+        const viewQueryKey = context.folderId ? ['folder', context.folderId] : ['dataRoom', dataRoomId];
+        queryClient.invalidateQueries({ 
+          queryKey: viewQueryKey,
+        });
+        // Refetch allFiles to restore correct state
+        queryClient.invalidateQueries({ 
+          queryKey: ['allFiles', dataRoomId],
+        });
+      }
+    },
   });
 
   const renameFolderMutation = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const response = await api.patch(`/folders/${id}/rename`, { name });
-      return response.data;
+      performance.mark('folder-rename-start');
+      try {
+        const response = await api.patch(`/folders/${id}/rename`, { name });
+        // Backend returns { success: true, data: { id, name, parentId, dataRoomId } }
+        const updatedFolder = response.data.data;
+        const parentId = updatedFolder.parentId || null;
+        return { id: updatedFolder.id, name: updatedFolder.name, parentId, dataRoomId: updatedFolder.dataRoomId };
+      } finally {
+        performance.mark('folder-rename-end');
+        performance.measure('folder-rename', 'folder-rename-start', 'folder-rename-end');
+        if (process.env.NODE_ENV === 'development') {
+          const measure = performance.getEntriesByName('folder-rename', 'measure')[0];
+          if (measure) {
+            console.log(`[Performance] folder-rename: ${measure.duration.toFixed(2)}ms`);
+          }
+        }
+      }
     },
     onMutate: async ({ id, name }: { id: string; name: string }) => {
-      const viewQueryKey = folderId ? ['folder', folderId] : ['dataRoom', dataRoomId];
-      
-      await queryClient.cancelQueries({ queryKey: ['allFolders', dataRoomId] });
-      await queryClient.cancelQueries({ queryKey: viewQueryKey });
+      // Cancel outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ['folder'], exact: false });
+      await queryClient.cancelQueries({ queryKey: ['dataRoom'], exact: false });
+      await queryClient.cancelQueries({ queryKey: ['allFolders'] });
 
-      const previousFolders = queryClient.getQueryData(['allFolders', dataRoomId]);
-      const previousView = queryClient.getQueryData(viewQueryKey);
-
-      // Update allFolders cache
-      queryClient.setQueryData(['allFolders', dataRoomId], (old: any) => {
-        if (!old || !old.data || !old.data.folders) return old;
-        const newFolders = old.data.folders
-          .filter((folder: FolderWithChildren) => folder != null)
-          .map((folder: FolderWithChildren) =>
-            folder.id === id ? { ...folder, name } : folder
-          );
-        return { ...old, data: { ...old.data, folders: newFolders } };
-      });
-
-      // Update folder view cache (for FolderView) or dataRoom cache (for DataRoomRoot)
-      queryClient.setQueryData(viewQueryKey, (old: any) => {
-        if (!old || !old.data) return old;
-        
-        // For folder view, update children array
-        if (folderId && old.data.children) {
-          const newChildren = old.data.children
-            .filter((folder: FolderWithChildren) => folder != null)
-            .map((folder: FolderWithChildren) =>
-              folder.id === id ? { ...folder, name } : folder
-            );
-          return { ...old, data: { ...old.data, children: newChildren } };
+      // Get current folder data to determine parentId
+      // Try to get from allFolders cache first (more reliable)
+      let parentId: string | null = null;
+      if (dataRoomId) {
+        const allFoldersData = queryClient.getQueryData(['allFolders', dataRoomId]) as any;
+        const folder = allFoldersData?.data?.folders?.find((f: Folder) => f.id === id);
+        if (folder?.parentId !== undefined) {
+          parentId = folder.parentId;
         }
-        
-        // For data room root, update folders array
-        if (!folderId && old.data.folders) {
-          const newFolders = old.data.folders
-            .filter((folder: FolderWithChildren) => folder != null)
-            .map((folder: FolderWithChildren) =>
-              folder.id === id ? { ...folder, name } : folder
-            );
-          return { ...old, data: { ...old.data, folders: newFolders } };
-        }
-        
-        return old;
-      });
-
-      return { previousFolders, previousView };
-    },
-    onSuccess: () => {
-      toast.success(SUCCESS_MESSAGES.FOLDER_RENAMED);
-      invalidateQueries();
-    },
-    onError: (err, variables, context) => {
-      toast.error(getErrorMessage(err));
-      if (context?.previousFolders) {
-        queryClient.setQueryData(['allFolders', dataRoomId], context.previousFolders);
       }
-      if (context?.previousView) {
-        const viewQueryKey = folderId ? ['folder', folderId] : ['dataRoom', dataRoomId];
-        queryClient.setQueryData(viewQueryKey, context.previousView);
+      
+      // Fallback: try to get from folder query if exists
+      if (parentId === null) {
+        const folderQuery = queryClient.getQueryData(['folder', id]) as any;
+        parentId = folderQuery?.data?.data?.parentId || null;
+      }
+
+      // Snapshot previous values for rollback
+      const previousFolder = parentId 
+        ? queryClient.getQueryData(['folder', parentId])
+        : queryClient.getQueryData(['dataRoom', dataRoomId]);
+      const previousAllFolders = queryClient.getQueryData(['allFolders', dataRoomId]);
+
+      // Optimistically update active view cache (currently open folder/dataRoom)
+      if (parentId) {
+        queryClient.setQueryData(['folder', parentId], (oldData: any) => {
+          if (!oldData?.data?.data) return oldData;
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data.data,
+              children: (oldData.data.data.children || []).map((f: Folder) =>
+                f.id === id ? { ...f, name } : f
+              ),
+            },
+          };
+        });
+      } else if (dataRoomId) {
+        queryClient.setQueryData(['dataRoom', dataRoomId], (oldData: any) => {
+          if (!oldData?.data?.data) return oldData;
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data.data,
+              folders: (oldData.data.data.folders || []).map((f: Folder) =>
+                f.id === id ? { ...f, name } : f
+              ),
+            },
+          };
+        });
+      }
+
+      // Also update the folder's own query if it's currently being viewed
+      queryClient.setQueryData(['folder', id], (oldData: any) => {
+        if (!oldData?.data?.data) return oldData;
+        return {
+          ...oldData,
+          data: {
+            ...oldData.data.data,
+            name,
+          },
+        };
+      });
+
+      // Optimistically update allFolders list cache (for FileTree)
+      if (dataRoomId) {
+        queryClient.setQueryData(['allFolders', dataRoomId], (oldData: any) => {
+          if (!oldData || !oldData.data) return oldData;
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data,
+              folders: (oldData.data.folders || []).map((f: Folder) =>
+                f.id === id ? { ...f, name } : f
+              ),
+            },
+          };
+        });
+      }
+
+      return { parentId, previousFolder, previousAllFolders };
+    },
+    onSuccess: (data, _variables, context) => {
+      toast.success(SUCCESS_MESSAGES.FOLDER_RENAMED);
+      
+      // Merge server response back into cache - use context.parentId from onMutate
+      // This ensures we update the same cache keys that were optimistically updated
+      const viewQueryKey = context?.parentId ? ['folder', context.parentId] : ['dataRoom', dataRoomId];
+      
+      // Update active view cache with server response (already updated optimistically)
+      queryClient.setQueryData(viewQueryKey, (oldData: any) => {
+        if (!oldData?.data?.data) return oldData;
+        return {
+          ...oldData,
+          data: {
+            ...oldData.data.data,
+            children: context?.parentId 
+              ? (oldData.data.data.children || []).map((f: Folder) =>
+                  f.id === data.id ? { ...f, name: data.name } : f
+                )
+              : oldData.data.data.children,
+            folders: !context?.parentId && dataRoomId
+              ? (oldData.data.data.folders || []).map((f: Folder) =>
+                  f.id === data.id ? { ...f, name: data.name } : f
+                )
+              : oldData.data.data.folders,
+          },
+        };
+      });
+
+      // Also update the folder's own query if it's currently being viewed
+      queryClient.setQueryData(['folder', data.id], (oldData: any) => {
+        if (!oldData?.data?.data) return oldData;
+        return {
+          ...oldData,
+          data: {
+            ...oldData.data.data,
+            name: data.name,
+          },
+        };
+      });
+      
+      // Update allFolders list cache with server response
+      if (dataRoomId) {
+        queryClient.setQueryData(['allFolders', dataRoomId], (oldData: any) => {
+          if (!oldData || !oldData.data) return oldData;
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data,
+              folders: (oldData.data.folders || []).map((f: Folder) =>
+                f.id === data.id ? { ...f, name: data.name } : f
+              ),
+            },
+          };
+        });
+      }
+
+      // Refetch active queries to ensure UI updates immediately (after cache updates)
+      // Invalidate first to mark queries as stale, then refetch
+      queryClient.invalidateQueries({ queryKey: viewQueryKey });
+      queryClient.invalidateQueries({ queryKey: ['folder', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['allFolders', dataRoomId] });
+      
+      // Then refetch active queries to get fresh data
+      queryClient.refetchQueries({ queryKey: ['allFolders', dataRoomId], type: 'active' });
+      queryClient.refetchQueries({ queryKey: viewQueryKey, type: 'active' });
+    },
+    onError: (err, _variables, context) => {
+      toast.error(getErrorMessage(err));
+      
+      // Rollback optimistic update on error
+      if (context?.parentId !== undefined && dataRoomId) {
+        // Restore previous values
+        if (context.previousFolder) {
+          const viewQueryKey = context.parentId ? ['folder', context.parentId] : ['dataRoom', dataRoomId];
+          queryClient.setQueryData(viewQueryKey, context.previousFolder);
+        }
+        if (context.previousAllFolders) {
+          queryClient.setQueryData(['allFolders', dataRoomId], context.previousAllFolders);
+        }
       }
     },
   });
 
   const renameFileMutation = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const response = await api.put(`/files/${id}`, { name });
-      return response.data;
+      performance.mark('file-rename-start');
+      try {
+        const response = await api.put(`/files/${id}`, { name });
+        // Backend returns { success: true, data: { id, name, folderId, dataRoomId } }
+        const updatedFile = response.data.data;
+        return { id: updatedFile.id, name: updatedFile.name, folderId: updatedFile.folderId, dataRoomId: updatedFile.dataRoomId };
+      } finally {
+        performance.mark('file-rename-end');
+        performance.measure('file-rename', 'file-rename-start', 'file-rename-end');
+        if (process.env.NODE_ENV === 'development') {
+          const measure = performance.getEntriesByName('file-rename', 'measure')[0];
+          if (measure) {
+            console.log(`[Performance] file-rename: ${measure.duration.toFixed(2)}ms`);
+          }
+        }
+      }
     },
     onMutate: async ({ id, name }: { id: string; name: string }) => {
-      const viewQueryKey = folderId ? ['folder', folderId] : ['dataRoom', dataRoomId];
+      // Cancel outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ['folder'], exact: false });
+      await queryClient.cancelQueries({ queryKey: ['dataRoom'], exact: false });
+      await queryClient.cancelQueries({ queryKey: ['allFiles'] });
+
+      // Get current file data to determine folderId
+      // Try to find file in cache to get folderId
+      let fileFolderId: string | null = folderId || null;
       
-      await queryClient.cancelQueries({ queryKey: ['allFiles', dataRoomId] });
-      await queryClient.cancelQueries({ queryKey: viewQueryKey });
-
-      const previousFiles = queryClient.getQueryData(['allFiles', dataRoomId]);
-      const previousView = queryClient.getQueryData(viewQueryKey);
-
-      // Update allFiles cache
-      queryClient.setQueryData(['allFiles', dataRoomId], (old: any) => {
-        if (!old || !old.data) return old;
-        const newFiles = old.data
-          .filter((file: File) => file != null)
-          .map((file: File) =>
-            file.id === id ? { ...file, name } : file
-          );
-        return { ...old, data: newFiles };
-      });
-
-      // Update folder view cache (for FolderView) or dataRoom cache (for DataRoomRoot)
-      queryClient.setQueryData(viewQueryKey, (old: any) => {
-        if (!old || !old.data) return old;
-        
-        // For folder view, update files array
-        if (folderId && old.data.files) {
-          const newFiles = old.data.files
-            .filter((file: File) => file != null)
-            .map((file: File) =>
-              file.id === id ? { ...file, name } : file
-            );
-          return { ...old, data: { ...old.data, files: newFiles } };
+      // Try to get from allFiles cache
+      if (dataRoomId) {
+        const allFilesData = queryClient.getQueryData(['allFiles', dataRoomId]) as any;
+        const file = allFilesData?.data?.find((f: FileType) => f.id === id);
+        if (file?.folderId !== undefined) {
+          fileFolderId = file.folderId;
         }
-        
-        // For data room root (files are in allFiles query, not in dataRoom query)
-        // so no need to update here, but still return old to be safe
-        return old;
+      }
+
+      // Snapshot previous values for rollback
+      const previousView = fileFolderId 
+        ? queryClient.getQueryData(['folder', fileFolderId])
+        : queryClient.getQueryData(['dataRoom', dataRoomId]);
+      const previousAllFiles = queryClient.getQueryData(['allFiles', dataRoomId]);
+
+      // Optimistically update active view cache (currently open folder/dataRoom)
+      if (fileFolderId) {
+        queryClient.setQueryData(['folder', fileFolderId], (oldData: any) => {
+          if (!oldData?.data?.data) return oldData;
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data.data,
+              files: (oldData.data.data.files || []).map((f: FileType) =>
+                f.id === id ? { ...f, name } : f
+              ),
+            },
+          };
+        });
+      } else if (dataRoomId) {
+        queryClient.setQueryData(['dataRoom', dataRoomId], (oldData: any) => {
+          if (!oldData?.data?.data) return oldData;
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data.data,
+              files: (oldData.data.data.files || []).map((f: FileType) =>
+                f.id === id ? { ...f, name } : f
+              ),
+            },
+          };
+        });
+      }
+
+      // Optimistically update allFiles list cache (for FileTree)
+      if (dataRoomId) {
+        queryClient.setQueryData(['allFiles', dataRoomId], (oldData: any) => {
+          if (!oldData || !oldData.data) return oldData;
+          return {
+            ...oldData,
+            data: (oldData.data || []).map((f: FileType) =>
+              f.id === id ? { ...f, name } : f
+            ),
+          };
+        });
+      }
+
+      return { folderId: fileFolderId, previousView, previousAllFiles };
+    },
+    onSuccess: (data, _variables, context) => {
+      toast.success(SUCCESS_MESSAGES.FILE_RENAMED);
+      
+      // Merge server response back into cache - use context.folderId from onMutate
+      // This ensures we update the same cache keys that were optimistically updated
+      const viewQueryKey = context?.folderId ? ['folder', context.folderId] : ['dataRoom', dataRoomId];
+      
+      // Update active view cache with server response (already updated optimistically)
+      queryClient.setQueryData(viewQueryKey, (oldData: any) => {
+        if (!oldData?.data?.data) return oldData;
+        return {
+          ...oldData,
+          data: {
+            ...oldData.data.data,
+            files: (oldData.data.data.files || []).map((f: FileType) =>
+              f.id === data.id ? { ...f, name: data.name } : f
+            ),
+          },
+        };
       });
 
-      return { previousFiles, previousView };
-    },
-    onSuccess: () => {
-      toast.success(SUCCESS_MESSAGES.FILE_RENAMED);
-      invalidateQueries();
-    },
-    onError: (err, variables, context) => {
-      toast.error(getErrorMessage(err));
-      if (context?.previousFiles) {
-        queryClient.setQueryData(['allFiles', dataRoomId], context.previousFiles);
+      // Update allFiles list cache with server response
+      if (dataRoomId) {
+        queryClient.setQueryData(['allFiles', dataRoomId], (oldData: any) => {
+          if (!oldData || !oldData.data) return oldData;
+          return {
+            ...oldData,
+            data: (oldData.data || []).map((f: FileType) =>
+              f.id === data.id ? { ...f, name: data.name } : f
+            ),
+          };
+        });
       }
-      if (context?.previousView) {
-        const viewQueryKey = folderId ? ['folder', folderId] : ['dataRoom', dataRoomId];
-        queryClient.setQueryData(viewQueryKey, context.previousView);
+
+      // Refetch active queries to ensure UI updates immediately (after cache updates)
+      // Invalidate first to mark queries as stale, then refetch
+      queryClient.invalidateQueries({ queryKey: viewQueryKey });
+      queryClient.invalidateQueries({ queryKey: ['allFiles', dataRoomId] });
+      
+      // Then refetch active queries to get fresh data
+      queryClient.refetchQueries({ queryKey: ['allFiles', dataRoomId], type: 'active' });
+      queryClient.refetchQueries({ queryKey: viewQueryKey, type: 'active' });
+    },
+    onError: (err, _variables, context) => {
+      toast.error(getErrorMessage(err));
+      
+      // Rollback optimistic update on error
+      if (context?.folderId !== undefined && dataRoomId) {
+        // Restore previous values
+        if (context.previousView) {
+          const viewQueryKey = context.folderId ? ['folder', context.folderId] : ['dataRoom', dataRoomId];
+          queryClient.setQueryData(viewQueryKey, context.previousView);
+        }
+        if (context.previousAllFiles) {
+          queryClient.setQueryData(['allFiles', dataRoomId], context.previousAllFiles);
+        }
       }
     },
   });
 
   const uploadFileMutation = useMutation({
-    mutationFn: async ({ file, name, folderId }: { file: globalThis.File; name: string; folderId: string | null }) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('name', name);
-      if (folderId) {
-        formData.append('folderId', folderId);
+    mutationFn: async ({ file, name, folderId: uploadFolderId }: { file: globalThis.File; name: string; folderId: string | null }) => {
+      performance.mark('file-upload-start');
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('name', name);
+        if (uploadFolderId) {
+          formData.append('folderId', uploadFolderId);
+        }
+        formData.append('dataRoomId', dataRoomId as string);
+        
+        const response = await api.post('/files/upload', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        
+        const newFile = response.data.data as FileType;
+        return { file: newFile, folderId: uploadFolderId };
+      } finally {
+        performance.mark('file-upload-end');
+        performance.measure('file-upload', 'file-upload-start', 'file-upload-end');
+        if (process.env.NODE_ENV === 'development') {
+          const measure = performance.getEntriesByName('file-upload', 'measure')[0];
+          if (measure) {
+            console.log(`[Performance] file-upload: ${measure.duration.toFixed(2)}ms`);
+          }
+        }
       }
-      formData.append('dataRoomId', dataRoomId as string);
+    },
+    onSuccess: (data) => {
+      // Surgical cache update - add file to cache
+      if (dataRoomId) {
+        addFileToCache(queryClient, dataRoomId, data.folderId, data.file);
+      }
       
-      const response = await api.post('/files/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      // Mark queries as stale and refetch active queries
+      // Surgical cache updates above handle immediate UI updates
+      // Refetch ensures data consistency across all components (including FileTree)
+      queryClient.invalidateQueries({ 
+        queryKey: ['folder'], 
+        exact: false,
       });
-      
-      return response.data.data;
-    },
-    onMutate: async (newFile: { file: globalThis.File; name: string; folderId: string | null }) => {
-      await queryClient.cancelQueries({ queryKey: ['allFiles', dataRoomId] });
-
-      const previousFiles = queryClient.getQueryData(['allFiles', dataRoomId]);
-
-      const optimisticFile: Partial<File> & { id: string, isOptimistic: boolean } = {
-        id: generateTemporaryId(),
-        name: newFile.name,
-        fileSize: newFile.file.size,
-        mimeType: newFile.file.type,
-        folderId: newFile.folderId || undefined,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isOptimistic: true,
-      };
-
-      queryClient.setQueryData(['allFiles', dataRoomId], (old: any) => 
-        old ? { ...old, data: [...(old.data || []).filter((f: any) => f != null), optimisticFile] } : { data: [optimisticFile] }
-      );
-
-      return { previousFiles, optimisticFile };
-    },
-    onSuccess: (savedFile, variables, context) => {
-      queryClient.setQueryData(['allFiles', dataRoomId], (old: any) => {
-        if (!old || !old.data) return old;
-        const newData = old.data
-          .filter((file: File) => file != null)
-          .map((file: File) => 
-            file.id === context?.optimisticFile.id ? savedFile : file
-          );
-        return { ...old, data: newData };
+      queryClient.invalidateQueries({ 
+        queryKey: ['dataRoom'], 
+        exact: false,
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['dataRooms'],
+      });
+      // Invalidate allFolders and allFiles queries used by FileTree
+      queryClient.invalidateQueries({ 
+        queryKey: ['allFolders'],
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['allFiles'],
       });
     },
-    onError: (err, variables, context) => {
+    onError: (err) => {
       toast.error(getErrorMessage(err));
-      if (context?.previousFiles) {
-        queryClient.setQueryData(['allFiles', dataRoomId], context.previousFiles);
-      }
-    },
-    onSettled: () => {
-      invalidateQueries();
     },
   });
 
@@ -382,7 +733,4 @@ export const useDataRoomMutations = ({ dataRoomId, folderId }: UseDataRoomMutati
     uploadFileMutation,
   };
 };
-
-// Helper to generate a temporary ID
-const generateTemporaryId = () => `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 

@@ -40,7 +40,12 @@ export const DataRooms: React.FC = () => {
         return [];
       }
 
-      const response = await api.get('/data-rooms');
+      const response = await api.get('/data-rooms', {
+        params: {
+          // Slim payload: only request essential fields
+          fields: 'id,name,ownerId,createdAt,updatedAt,_count',
+        },
+      });
       return response.data.data || [];
     },
     enabled: !!user, // Only run when user is available
@@ -54,29 +59,8 @@ export const DataRooms: React.FC = () => {
       if (!user) throw new Error('User not authenticated');
 
       const response = await api.post('/data-rooms', { name });
-      return response.data.data;
-    },
-    // Optimistic update: Add immediately to UI
-    onMutate: async (name: string) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['dataRooms'] });
-
-      // Snapshot previous value
-      const previousDataRooms = queryClient.getQueryData<DataRoom[]>(['dataRooms']);
-
-      // Optimistically update with temporary data room
-      const tempDataRoom: DataRoom = {
-        id: `temp-${Date.now()}`, // Temporary ID
-        name,
-        ownerId: user?.id || '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      queryClient.setQueryData<DataRoom[]>(['dataRooms'], (old = []) => [tempDataRoom, ...old]);
-
-      // Return context with snapshot
-      return { previousDataRooms };
+      // Trim response: only return ID since we invalidate queries anyway
+      return { id: response.data.data?.id };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dataRooms'] });
@@ -84,13 +68,8 @@ export const DataRooms: React.FC = () => {
       setNewDataRoomName('');
       toast.success(SUCCESS_MESSAGES.DATA_ROOM_CREATED);
     },
-    // On error, rollback to previous state
-    onError: (error: unknown, name: string, context: any) => {
+    onError: (error: unknown) => {
       console.error('❌ Data room creation failed:', getErrorMessage(error));
-      if (context?.previousDataRooms) {
-        queryClient.setQueryData(['dataRooms'], context.previousDataRooms);
-      }
-
       const errorMessage = getErrorMessage(error);
       toast.error(errorMessage);
     },
@@ -100,35 +79,15 @@ export const DataRooms: React.FC = () => {
     mutationFn: async (id: string) => {
       if (!user) throw new Error('User not authenticated');
 
-      const response = await api.delete(`/data-rooms/${id}`);
-      return response.data;
-    },
-    // Optimistic update: Remove immediately from UI
-    onMutate: async (id: string) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['dataRooms'] });
-
-      // Snapshot previous value
-      const previousDataRooms = queryClient.getQueryData<DataRoom[]>(['dataRooms']);
-
-      // Optimistically remove from UI
-      queryClient.setQueryData<DataRoom[]>(['dataRooms'], (old = []) =>
-        old.filter(dataRoom => dataRoom.id !== id)
-      );
-
-      // Return context with snapshot
-      return { previousDataRooms };
+      await api.delete(`/data-rooms/${id}`);
+      // Trim response: return minimal data since we invalidate queries anyway
+      return { id };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dataRooms'] });
       toast.success(SUCCESS_MESSAGES.DATA_ROOM_DELETED);
     },
-    // On error, rollback to previous state
-    onError: (error: unknown, id: string, context: any) => {
-      if (context?.previousDataRooms) {
-        queryClient.setQueryData(['dataRooms'], context.previousDataRooms);
-      }
-
+    onError: (error: unknown) => {
       const errorMessage = getErrorMessage(error);
       toast.error(errorMessage);
     },
@@ -152,7 +111,12 @@ export const DataRooms: React.FC = () => {
     queryClient.prefetchQuery({
       queryKey: ['dataRoom', dataRoomId],
       queryFn: async () => {
-        const response = await api.get(`/data-rooms/${dataRoomId}`);
+        const response = await api.get(`/data-rooms/${dataRoomId}`, {
+          params: {
+            // Slim payload: only request essential fields
+            fields: 'id,name,parentId',
+          },
+        });
         return response.data;
       },
       staleTime: 2 * 60 * 1000, // 2 minutes
@@ -162,7 +126,12 @@ export const DataRooms: React.FC = () => {
     queryClient.prefetchQuery({
       queryKey: ['folders', dataRoomId],
       queryFn: async () => {
-        const response = await api.get(`/data-rooms/${dataRoomId}`);
+        const response = await api.get(`/data-rooms/${dataRoomId}`, {
+          params: {
+            // Slim payload: only request essential fields
+            fields: 'id,name,parentId',
+          },
+        });
         return response.data;
       },
       staleTime: 2 * 60 * 1000, // 2 minutes
@@ -217,9 +186,7 @@ export const DataRooms: React.FC = () => {
               key={dataRoom.id}
               className="hover:shadow-lg transition-shadow"
               onMouseEnter={() => {
-                if (!dataRoom.id.startsWith('temp-')) {
-                  handleDataRoomHover(dataRoom.id);
-                }
+                handleDataRoomHover(dataRoom.id);
               }}
             >
               <CardHeader>
@@ -237,24 +204,16 @@ export const DataRooms: React.FC = () => {
                     {dataRoom._count?.folders ?? 0} {dataRoom._count?.folders === 1 ? 'folder' : 'folders'}
                   </span>
                   <div className="flex gap-2">
-                    {/* Don't allow opening data rooms with temporary IDs */}
-                    {dataRoom.id.startsWith('temp-') ? (
-                      <Button variant="outline" size="sm" disabled>
-                        Creating...
-                      </Button>
-                    ) : (
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to={`/data-rooms/${dataRoom.id}`}>
-                          Open
-                        </Link>
-                      </Button>
-                    )}
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/data-rooms/${dataRoom.id}`}>
+                        Open
+                      </Link>
+                    </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button
                           variant="destructive"
                           size="sm"
-                          disabled={dataRoom.id.startsWith('temp-')}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

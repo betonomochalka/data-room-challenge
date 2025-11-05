@@ -146,8 +146,8 @@ export const GoogleDriveFilePicker: React.FC<GoogleDriveFilePickerProps> = ({
                 {filteredFiles.map((file) => (
                   <div
                     key={file.id}
-                    className={`flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors ${
-                      selectedFiles.has(file.id) ? 'bg-gray-100 dark:bg-gray-800' : ''
+                    className={`flex items-center gap-3 p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors ${
+                      selectedFiles.has(file.id) ? 'bg-muted' : ''
                     }`}
                     onClick={() => handleToggleFile(file.id)}
                   >

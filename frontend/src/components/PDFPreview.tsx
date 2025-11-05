@@ -35,7 +35,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
   if (error) {
     return (
       <div className={`flex items-center justify-center bg-muted ${className}`} style={{ width, height }}>
-        <FileText className="h-16 w-16 text-red-500" />
+        <FileText className="h-16 w-16 text-muted-foreground" />
       </div>
     );
   }
@@ -44,7 +44,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({
     <div className={`flex items-center justify-center bg-muted overflow-hidden ${className}`} style={{ width, height }}>
       {loading && (
         <div className="flex items-center justify-center">
-          <FileText className="h-16 w-16 text-red-500 animate-pulse" />
+          <FileText className="h-16 w-16 text-muted-foreground animate-pulse" />
         </div>
       )}
       <Document

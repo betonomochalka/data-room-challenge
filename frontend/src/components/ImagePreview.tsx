@@ -30,7 +30,7 @@ export const ImagePreview: React.FC<ImagePreviewProps> = ({
   if (error) {
     return (
       <div className={`flex items-center justify-center bg-muted ${className}`} style={{ width, height }}>
-        <ImageIcon className="h-16 w-16 text-purple-500" />
+        <ImageIcon className="h-16 w-16 text-muted-foreground" />
       </div>
     );
   }
@@ -39,7 +39,7 @@ export const ImagePreview: React.FC<ImagePreviewProps> = ({
     <div className={`flex items-center justify-center bg-muted overflow-hidden ${className}`} style={{ width, height }}>
       {loading && (
         <div className="flex items-center justify-center">
-          <ImageIcon className="h-16 w-16 text-purple-500 animate-pulse" />
+          <ImageIcon className="h-16 w-16 text-muted-foreground animate-pulse" />
         </div>
       )}
       <img

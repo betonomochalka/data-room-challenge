@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+const API_URL = process.env.PYTHON_API_URL || 'http://localhost:3001/api';
 
 let token: string | null = null;
 
@@ -20,6 +20,9 @@ api.interceptors.request.use(
   (config) => {
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      // If no token, reject the request to avoid 401 errors
+      // This is handled by the calling code
     }
     return config;
   },
@@ -30,13 +33,61 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('❌ [API] Request failed:', {
+    // API issues - log to console
+    if (error.response) {
+      const status = error.response?.status;
+      const statusText = error.response?.statusText;
+      const data = error.response?.data;
+      
+      // Database errors (usually 500 or 503)
+      if (status === 500 || status === 503) {
+        const errorMessage = data?.message || data?.error || 'Server error';
+        const isDatabaseError = 
+          errorMessage.includes('database') ||
+          errorMessage.includes('connection') ||
+          errorMessage.includes('OperationalError') ||
+          errorMessage.includes('server closed the connection');
+        
+        if (isDatabaseError) {
+          console.error('[API Error] Database connection error:', {
+            status,
+            statusText,
+            message: errorMessage,
+            url: error.config?.url,
+            method: error.config?.method,
+          });
+        } else {
+          console.error('[API Error] Server error:', {
+            status,
+            statusText,
+            data,
+            url: error.config?.url,
+            method: error.config?.method,
+          });
+        }
+      } else {
+        // Other API errors
+        console.error('[API Error] Request failed:', {
+          status,
+          statusText,
+          data,
+          url: error.config?.url,
+          method: error.config?.method,
+        });
+      }
+    } else if (error.code === 'ERR_NETWORK') {
+      // Network errors
+      console.error('[API Error] Network error:', {
+        code: error.code,
+        message: error.message,
+        url: error.config?.url,
+      });
+    } else {
+      // Unexpected errors
+      console.error('[Unexpected Error] API request failed:', {
+        error,
         url: error.config?.url,
         method: error.config?.method,
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message,
       });
     }
 

@@ -1,0 +1,10 @@
+Top 5 Largest Files by Line Count in Data Room Project
+=======================================================
+
+1. 19,551 lines  frontend/package-lock.json
+2.  6,087 lines  old_backend/package-lock.json
+3.    840 lines  frontend/src/components/FileTree.tsx
+4.    736 lines  frontend/src/hooks/useDataRoomMutations.ts
+5.    692 lines  fixes/ADDITIONAL_OPTIMIZATIONS.md
+
+Note: Results exclude node_modules, .git, .venv, __pycache__, .cache, and build directories.

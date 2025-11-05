@@ -18,22 +18,22 @@ export const getFileIconAndColor = (mimeType: string | null | undefined, fileNam
   
   // PDF
   if (mime === 'application/pdf' || extension === 'pdf') {
-    return { Icon: FileText, color: 'text-red-500' };
+    return { Icon: FileText, color: 'text-foreground' };
   }
   
   // Images
   if (mime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'].includes(extension)) {
-    return { Icon: Image, color: 'text-purple-500' };
+    return { Icon: Image, color: 'text-foreground' };
   }
   
   // Videos
   if (mime.startsWith('video/') || ['mp4', 'avi', 'mov', 'mkv', 'webm', 'flv'].includes(extension)) {
-    return { Icon: Video, color: 'text-pink-500' };
+    return { Icon: Video, color: 'text-foreground' };
   }
   
   // Audio
   if (mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(extension)) {
-    return { Icon: Music, color: 'text-cyan-500' };
+    return { Icon: Music, color: 'text-foreground' };
   }
   
   // Spreadsheets
@@ -42,7 +42,7 @@ export const getFileIconAndColor = (mimeType: string | null | undefined, fileNam
     mime.includes('excel') ||
     ['xlsx', 'xls', 'csv'].includes(extension)
   ) {
-    return { Icon: FileSpreadsheet, color: 'text-green-500' };
+    return { Icon: FileSpreadsheet, color: 'text-foreground' };
   }
   
   // Documents (Word, etc.)
@@ -51,22 +51,22 @@ export const getFileIconAndColor = (mimeType: string | null | undefined, fileNam
     mime.includes('word') ||
     ['doc', 'docx', 'txt', 'rtf'].includes(extension)
   ) {
-    return { Icon: FileText, color: 'text-blue-500' };
+    return { Icon: FileText, color: 'text-foreground' };
   }
   
   // Code files
   if (
     ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'html', 'css', 'json', 'xml', 'yml', 'yaml', 'sh', 'sql'].includes(extension)
   ) {
-    return { Icon: FileCode, color: 'text-orange-500' };
+    return { Icon: FileCode, color: 'text-foreground' };
   }
   
   // Archives
   if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(extension)) {
-    return { Icon: Archive, color: 'text-yellow-600' };
+    return { Icon: Archive, color: 'text-foreground' };
   }
   
   // Default
-  return { Icon: FileIcon, color: 'text-gray-500' };
+  return { Icon: FileIcon, color: 'text-muted-foreground' };
 };
 

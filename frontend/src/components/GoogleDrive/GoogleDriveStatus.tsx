@@ -43,7 +43,7 @@ export const GoogleDriveStatus: React.FC = () => {
         {isConnected ? (
           <div className="space-y-4">
             <div className="flex items-start gap-3">
-              <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+              <CheckCircle2 className="h-5 w-5 text-foreground mt-0.5" />
               <div className="flex-1">
                 <p className="font-medium">{status?.userInfo?.name || 'Connected'}</p>
                 <p className="text-sm text-muted-foreground">{status?.userInfo?.email}</p>

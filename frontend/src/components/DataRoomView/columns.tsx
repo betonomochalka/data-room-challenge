@@ -39,7 +39,7 @@ export const getColumns = (
       const item = row.original;
       const isFolder = item.type === 'folder';
       const { Icon, color } = isFolder 
-        ? { Icon: Folder, color: 'text-yellow-500' }
+        ? { Icon: Folder, color: 'text-foreground' }
         : getFileIconAndColor(item.mimeType, item.name);
       
       const handleClick = () => {
@@ -52,7 +52,7 @@ export const getColumns = (
       
       return (
         <div 
-          className="flex items-center gap-2 cursor-pointer hover:text-foreground"
+          className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors"
           onClick={handleClick}
         >
           <Icon className={`h-4 w-4 ${color}`} />

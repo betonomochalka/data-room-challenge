@@ -1,173 +1,189 @@
 # Data Room
 
-A secure file and folder management application for organizing and sharing documents. Built with modern web technologies, Data Room provides a user-friendly interface for managing data rooms, folders, and files with support for Google Drive integration.
+Data Room is a secure document workspace for teams to organise, preview, and share files inside dedicated data rooms. The repository is a monorepo that pairs a React single-page application with a Flask API backend connected to Supabase for authentication, PostgreSQL, and file storage.
 
-## Features
+## Table of Contents
+- [Highlights](#highlights)
+- [Tech Stack](#tech-stack)
+- [Monorepo Layout](#monorepo-layout)
+- [Getting Started](#getting-started)
+- [Environment Variables](#environment-variables)
+- [Running Locally](#running-locally)
+- [Database & Persistence](#database--persistence)
+- [Optional Integrations](#optional-integrations)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Troubleshooting](#troubleshooting)
+- [Additional Documentation](#additional-documentation)
 
-- **Secure Authentication**: Google OAuth authentication via Supabase Auth
-- **Data Room Management**: Create and organize multiple data rooms
-- **Folder Organization**: Create nested folder structures for better organization
-- **File Management**: Upload, view, rename, and delete files
-- **Google Drive Integration**: Import files directly from Google Drive
-- **File Previews**: View PDFs and images directly in the browser
-- **Search Functionality**: Search files and folders within data rooms
-- **Responsive Design**: Works seamlessly on desktop and mobile devices
+## Highlights
+- Supabase-authenticated login with Google OAuth and automatic user bootstrap on the backend.
+- Hierarchical data-room and folder tree with contextual actions and optimistic updates powered by TanStack Query.
+- Direct-to-storage uploads and secure signed URLs served from Supabase Storage.
+- Rich file previews for PDFs, Office documents (via online viewers), and images.
+- Google Drive import utilities for bringing external documents into a data room.
+- Performance-aware Flask API with connection pooling, request timing, and cache-aware invalidation helpers.
+- Monorepo developer experience: one command boots both services, and shared utilities live alongside each subsystem.
 
 ## Tech Stack
 
--   **Frontend:** React 19, TypeScript, React Router v7, TanStack Query, Tailwind CSS
--   **Backend:** Node.js, Express.js, TypeScript
--   **Database:** Supabase (PostgreSQL)
--   **ORM:** Prisma
--   **Authentication:** Supabase Auth (Google OAuth)
--   **File Storage:** Supabase Storage
--   **Deployment:** Vercel
+| Area | Technologies |
+| --- | --- |
+| Frontend | React 19, TypeScript, React Router v7, TanStack Query 5, Tailwind CSS, Radix UI primitives, CRACO/CRA tooling |
+| Backend | Python 3.9+, Flask 3, SQLAlchemy 2, Marshmallow, Supabase Python client |
+| Authentication | Supabase Auth (Google OAuth) with JWT validation inside Flask |
+| Persistence | Supabase PostgreSQL + SQLAlchemy ORM models |
+| File storage | Supabase Storage (`data-room-files` bucket) with signed upload/download URLs |
+| Optional services | Redis (tag-based cache), Google Drive API |
+| Tooling | npm scripts with `concurrently`, pytest (planned), React Testing Library + Jest |
 
-## Design Decisions
+## Monorepo Layout
 
-The application is a monorepo with a React frontend and a Node.js (Express) backend.
-The frontend uses TanStack Query for state management and Tailwind CSS for styling.
-The backend connects to a Supabase (PostgreSQL) database via the Prisma ORM.
-Authentication is handled by Supabase Auth, and the entire application is deployed on Vercel.
-
-For more detailed information see [ARCHITECTURE.md](ARCHITECTURE.md).
+```
+data-room/
+├── frontend/           # React SPA (CRA + CRACO)
+│   ├── src/            # Components, hooks, contexts, pages, utils
+│   ├── public/
+│   └── env.example
+├── backend/            # Flask API
+│   ├── routes/         # Blueprint modules
+│   ├── middleware/     # Auth, error handling, instrumentation
+│   ├── services/       # Google Drive integration
+│   ├── utils/          # Caching, validation, Supabase helpers
+│   ├── models.py
+│   ├── config.py
+│   └── env.example
+├── old_backend/        # Legacy Node/Prisma implementation (still used for Prisma tooling)
+├── package.json        # Root scripts (`npm run dev`, etc.)
+├── README.md
+└── ARCHITECTURE.md
+```
 
 ## Getting Started
 
 ### Prerequisites
+- Node.js 18+
+- npm 9+ (ships with Node 18)
+- Python 3.9+ with `pip`
+- Supabase project (database, auth, storage)
+- Optional: Redis 6+ for distributed caching, Google Cloud project for Drive integration
 
--   Node.js (v18 or later)
--   npm (v8 or later)
--   Git
--   A Supabase account and a new project created.
+### 1. Clone the repository
 
-### Local Development
+```bash
+git clone <repository-url>
+cd data-room
+```
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository-url>
-    cd data-room
-    ```
+### 2. Install dependencies
 
-2.  **Install dependencies:**
-    This command installs dependencies for the root, frontend, and backend.
-    ```bash
-    npm run install:all
-    ```
+```bash
+npm install                 # installs root-level tooling (concurrently, dotenv-cli)
+cd frontend && npm install  # install SPA dependencies
+cd ../backend
+python -m venv .venv        # optional but recommended
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-3.  **Set up environment variables:**
-    You'll need to create `.env` files for both the frontend and backend. Copy the contents from the `.env.example` files in each directory.
+### 3. Configure environment
 
-    -   **Backend:** Create a `.env` file in the `backend` directory by copying `backend/.env.example`.
-        ```bash
-        cp backend/.env.example backend/.env
-        ```
-        You'll need to get your project's `DATABASE_URL` from your Supabase project settings (under Database -> Connection string) and add it to `backend/.env`.
+Copy the example files and adjust the values from your Supabase and Google Cloud projects.
 
-    -   **Frontend:** Create a `.env.local` file in the `frontend` directory by copying `frontend/env.example`.
-        ```bash
-        cp frontend/env.example frontend/.env.local
-        ```
-        You will also need to set up environment variables for the frontend for Supabase authentication. Add your Supabase URL and Anon Key from your Supabase project's API settings to `frontend/.env.local`.
+```bash
+cp backend/env.example backend/.env
+cp frontend/env.example frontend/.env.local
+```
 
+Update:
+- `backend/.env` with your Supabase connection string, service role key, allowed origins, and Google OAuth credentials (if using Drive).
+- `frontend/.env.local` with Supabase public URL/anon key and the URL of the Flask API (`PYTHON_API_URL`).
 
-4.  **Set up Google Drive integration (Optional):**
-    If you want to enable Google Drive file imports:
-    
-    - Go to [Google Cloud Console](https://console.cloud.google.com)
-    - Create a new project or select an existing one
-    - Enable the Google Drive API
-    - Create OAuth 2.0 credentials (Web application)
-    - **IMPORTANT:** Add authorized redirect URIs in Google Cloud Console:
-      - For local development: `http://localhost:3001/api/google-drive/callback`
-      - For production (Vercel): `https://your-backend-domain.vercel.app/api/google-drive/callback`
-      - The redirect URI in Google Cloud Console must match exactly with `GOOGLE_REDIRECT_URI` environment variable
-    - Copy the Client ID and Client Secret to your `backend/.env` file
-    - See `backend/.env.example` for the required environment variables
+Refer to [Environment Variables](#environment-variables) for details.
 
-5.  **Apply database schema:**
-    This command will push the schema defined in `backend/prisma/schema.prisma` to your Supabase database.
-    ```bash
-    npm run db:push
-    ```
+## Environment Variables
 
-6.  **Start the development servers:**
-    This will start both the frontend and backend servers concurrently.
-    ```bash
-    npm run dev
-    ```
-    -   Frontend will be running on `http://localhost:3000`
-    -   Backend will be running on `http://localhost:3001`
+| Location | Purpose | Required keys |
+| --- | --- | --- |
+| `backend/.env` | Flask configuration, Supabase credentials, optional Redis/Drive | `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `ALLOWED_ORIGINS`, `FRONTEND_URL`, optional `GOOGLE_*`, `REDIS_URL` |
+| `frontend/.env.local` | SPA runtime config | `PYTHON_API_URL`, `REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_ANON_KEY`, optional `REACT_APP_SITE_URL` |
+| `old_backend/env.example` | Legacy Prisma tooling | Only needed if you still run the Node/Prisma stack |
+
+Environment values are loaded via `python-dotenv` on the backend and CRA's env loading on the frontend. The CRACO config exposes `PYTHON_API_URL` without the `REACT_APP_` prefix so it can be used directly inside `src/lib/api.ts`.
+
+## Running Locally
+
+Run both services with one command from the repository root:
+
+```bash
+npm run dev
+```
+
+- Frontend: http://localhost:3000
+- Backend: http://localhost:3001 (API served under `/api`)
+
+To run them separately:
+
+```bash
+npm run dev:frontend   # from repository root
+npm run dev:backend
+```
+
+The backend automatically creates tables on first run (`db.create_all()`). Confirm your Supabase database allows connections from your IP.
+
+## Database & Persistence
+
+- SQLAlchemy models live in `backend/models.py` and map to Supabase PostgreSQL tables (`users`, `data_rooms`, `folders`, `files`, `google_drive_tokens`).
+- Connection pooling and timeouts are tuned in `backend/config.py` for Supabase session vs transaction ports. `Config.validate()` raises on missing critical env keys.
+- Database migrations are not yet automated for the Flask backend; Supabase tables are created on startup. The legacy `old_backend` directory still contains Prisma schema/scripts if you need migrations or introspection. Use the provided npm scripts (`npm run db:push`, etc.) against the Prisma schema when required.
+
+## Optional Integrations
+
+**Google Drive import**
+
+- Enable the Drive API in Google Cloud, create OAuth credentials (web application), and add the backend callback URL (`http://localhost:3001/api/google-drive/callback` for local).
+- Populate `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI`.
+- The frontend exposes connect/disconnect flows and Drive file pickers that call the Flask service in `backend/services/google_drive_service.py`.
+
+**Caching**
+
+- The backend ships with a tag-aware cache layer (`backend/utils/cache.py`) that prefers Redis but falls back to an in-memory store.
+- Set `REDIS_URL`, `CACHE_ENABLED`, and optionally `CACHE_TTL` in `backend/.env`.
+- See `backend/CACHING.md` for architecture and operational guide.
+
+## Testing
+
+- Frontend: `npm test` runs Jest + React Testing Library (configured in `frontend/package.json` and `craco.config.js`).
+- Backend: pytest scaffolding is not included yet; add tests under `backend/tests` and run with `pytest` once configured.
+- Linting: CRA's ESLint rules run with `npm test` or via your editor.
 
 ## Deployment
 
-### Vercel
+The project deploys cleanly to Vercel or any platform that supports static frontends and Python web services.
 
-This project is configured for easy deployment to Vercel.
+- **Frontend (Vercel)**
+  - Root directory: `frontend`
+  - Build command: `npm run build`
+  - Output directory: `build`
+  - Copy the variables from `frontend/.env.local` into Vercel project settings.
 
-1.  **Connect your repository to Vercel.**
-2.  Vercel should automatically detect that it is a monorepo. You will need to configure two projects, one for the frontend and one for the backend.
-3.  **Frontend Configuration:**
-    -   **Root Directory:** `frontend`
-    -   **Build Command:** `npm run build`
-    -   **Output Directory:** `build`
-    -   **Environment Variables:** Add the following environment variables in the Vercel project settings. You can use your `frontend/.env.local` file as a reference. For more details, see `frontend/env.example`.
-        ```env
-        REACT_APP_API_URL="<your_deployed_backend_url>/api"
-        REACT_APP_SUPABASE_URL="https://[YOUR_SUPABASE_REF].supabase.co"
-        REACT_APP_SUPABASE_ANON_KEY="[YOUR_SUPABASE_ANON_KEY]"
-        ```
+- **Backend (Vercel serverless or other)**
+  - Root directory: `backend`
+  - Install command: `pip install -r requirements.txt`
+  - Start command: Configure a WSGI entrypoint (e.g., `gunicorn app:create_app()`) or adapt to the platform’s requirements.
+  - Provide `DATABASE_URL`, Supabase keys, allowed origins, and Google/Redis credentials if used.
 
-4.  **Backend Configuration:**
-    -   **Root Directory:** `backend`
-    -   Vercel will detect the `vercel.json` and configure it as a serverless function.
-    -   **OPTIONS Allow list:** I recommend to add /api. You can find it in project settings.
-    -   **Environment Variables:** Add the following environment variables in the Vercel project settings. For more details, see `backend/.env.example`.
-        ```env
-        DATABASE_URL="<your_supabase_connection_string>"
-        DIRECT_URL="<your_supabase_direct_connection_string>"
-        SUPABASE_URL="https://[YOUR_SUPABASE_REF].supabase.co"
-        SUPABASE_SERVICE_ROLE_KEY="[YOUR_SUPABASE_SERVICE_ROLE_KEY]"
-        SUPABASE_ANON_KEY="[SUPABASE_ANON_KEY]"
-        ALLOWED_ORIGINS="<your_deployed_frontend_url>"
-        FRONTEND_URL="<your_deployed_frontend_url>"
-        
-        # Optional: Google Drive Integration
-        GOOGLE_CLIENT_ID="<your_google_client_id>"
-        GOOGLE_CLIENT_SECRET="<your_google_client_secret>"
-        GOOGLE_REDIRECT_URI="https://your-backend-domain.vercel.app/api/google-drive/callback"
-        # Note: Replace "your-backend-domain.vercel.app" with your actual Vercel backend domain
-        # IMPORTANT: This exact URL must also be added to Google Cloud Console OAuth credentials
-        ```
+When deploying elsewhere (Railway, Fly, etc.), make sure the environment exposes the same variables and allows outbound connections to Supabase and Google APIs.
 
-## Database Management
+## Troubleshooting
 
-Prisma is used for database management.
+- `401 Unauthorized`: confirm Supabase credentials and that the frontend sends the JWT via `Authorization` header (handled by `lib/api.ts` once `AuthContext` sets the token).
+- Database timeouts: adjust pool sizes or switch to Supabase transaction pool (`:6543`) as recommended in `backend/env.example`.
+- Google Drive OAuth redirect issues: ensure `GOOGLE_REDIRECT_URI` matches exactly in Google Cloud and the backend config.
+- Missing env variables: the backend fails fast—check terminal logs when `Config.validate()` raises.
 
--   **Generate Prisma Client:** After any changes to the `schema.prisma` file, you need to regenerate the Prisma Client.
-    ```bash
-    npm run db:generate
-    ```
--   **Push schema changes:** To apply schema changes to the database without creating a migration.
-    ```bash
-    npm run db:push
-    ```
--   **Create migrations:** To create a new migration file for schema changes.
-    ```bash
-    npm run db:migrate
-    ```
--   **Prisma Studio:** To open a GUI for your database.
-    ```bash
-    npm run db:studio
-    ```
+## Additional Documentation
 
-## Available Scripts
-
--   `npm run dev`: Starts both frontend and backend development servers.
--   `npm run build`: Builds both frontend and backend for production.
--   `npm run test`: Runs tests for both frontend and backend.
--   `npm run install:all`: Installs all dependencies.
--   `npm run db:generate`: Generates Prisma Client.
--   `npm run db:push`: Pushes schema to the database.
--   `npm run db:migrate`: Creates a new database migration.
--   `npm run db:studio`: Opens Prisma Studio.
+- `ARCHITECTURE.md` — subsystem deep dive and sequence diagrams.
+- `backend/CACHING.md` — cache architecture and operations.
+- `backend/services/google_drive_service.py` — reference implementation for Drive import flow.

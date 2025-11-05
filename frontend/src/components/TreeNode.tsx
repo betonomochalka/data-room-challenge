@@ -2,9 +2,13 @@ import React, { useState, useMemo, useRef } from 'react';
 import { DataRoomItem } from '@/components/DataRoomView';
 import { ChevronRight, ChevronDown, Folder, FileText, Edit, Trash2 } from 'lucide-react';
 import { useFileViewer, useDataRoomData } from '@/hooks';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { fileTreeEvents } from '@/lib/events';
 import { getFileIconAndColor } from '@/utils/fileIcons';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { DataRoom } from '@/types';
+import { buildFolderUrlFromId } from '@/utils/folderPaths';
 
 interface TreeNodeProps {
   item: DataRoomItem;
@@ -16,13 +20,39 @@ const TreeNode: React.FC<TreeNodeProps> = ({ item, level }) => {
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
   const { handleFileView } = useFileViewer();
-  const { id: dataRoomId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const triggerRef = useRef<HTMLDivElement>(null);
 
+  // Fetch user's Data Room automatically
+  const { data: dataRoomResponse } = useQuery<{ success: boolean; data: DataRoom }>({
+    queryKey: ['dataRooms'],
+    queryFn: async () => {
+      const response = await api.get('/data-rooms');
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
+  const dataRoomId = dataRoomResponse?.data?.id;
+
+  // Fetch all folders to build paths
+  const { data: foldersResponse } = useQuery({
+    queryKey: ['allFolders', dataRoomId],
+    queryFn: async () => {
+      const response = await api.get('/folders', { params: { dataRoomId } });
+      return response.data;
+    },
+    enabled: !!dataRoomId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
+  const allFolders = foldersResponse?.data?.folders || [];
+
   const isFolder = item.type === 'folder';
   const { Icon, color } = isFolder 
-    ? { Icon: Folder, color: 'text-yellow-500' }
+    ? { Icon: Folder, color: 'text-foreground' }
     : getFileIconAndColor(item.mimeType, item.name);
 
   const { folderQuery } = useDataRoomData({
@@ -55,7 +85,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({ item, level }) => {
   };
 
   const handleFolderNavigation = () => {
-    navigate(`/data-rooms/${dataRoomId}/folders/${item.id}`);
+    if (item.type === 'folder') {
+      const folderUrl = buildFolderUrlFromId(item.id, allFolders);
+      navigate(folderUrl);
+    }
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -68,7 +101,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ item, level }) => {
     <div>
       <div
         ref={triggerRef}
-        className="flex items-center p-1 cursor-pointer hover:bg-muted rounded relative"
+        className="flex items-center p-1 cursor-pointer hover:bg-muted rounded relative text-sm"
         style={{ paddingLeft: `${level * 20}px` }}
         onContextMenu={handleContextMenu}
       >
@@ -82,7 +115,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ item, level }) => {
           className="flex items-center flex-grow"
         >
           {isFolder ? (
-            <Folder className="h-4 w-4 mr-2 text-yellow-500" />
+            <Folder className="h-4 w-4 mr-2 text-foreground" />
           ) : (
             <Icon className={`h-4 w-4 mr-2 ${color}`} style={{ marginLeft: isFolder ? 0 : '1.25rem' }} />
           )}
@@ -121,7 +154,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ item, level }) => {
             <div
               onClick={(e) => {
                 e.stopPropagation();
-                fileTreeEvents.publish('renameItem', item);
+                fileTreeEvents.emit('renameItem', item);
                 setShowContextMenu(false);
               }}
               className="flex items-center px-2 py-1.5 text-sm cursor-pointer hover:bg-accent rounded"
@@ -133,7 +166,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ item, level }) => {
             <div
               onClick={(e) => {
                 e.stopPropagation();
-                fileTreeEvents.publish('deleteItem', item);
+                fileTreeEvents.emit('deleteItem', item);
                 setShowContextMenu(false);
               }}
               className="flex items-center px-2 py-1.5 text-sm cursor-pointer hover:bg-accent rounded text-destructive"

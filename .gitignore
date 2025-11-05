@@ -18,6 +18,8 @@ backend/.env
 backend/.env.*
 frontend/.env
 frontend/.env.*
+old_backend/.env
+old_backend/.env.*
 
 !frontend/.env.example
 !backend/.env.example
@@ -33,7 +35,23 @@ backend/node_modules/
 # BUILD OUTPUTS
 # ============================================
 
-# Backend build
+# Backend build (old Node.js backend)
+old_backend/dist/
+old_backend/build/
+
+# Python backend (venv, __pycache__, etc.)
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/.Python
+backend/env/
+backend/venv/
+backend/ENV/
+backend/env.bak/
+backend/venv.bak/
+backend/.venv
+backend/*.egg-info/
 backend/dist/
 backend/build/
 
@@ -45,10 +63,10 @@ frontend/dist/
 # DATABASE
 # ============================================
 
-# Prisma
-backend/prisma/migrations/
-backend/prisma/dev.db
-backend/prisma/*.db
+# Prisma (old backend)
+old_backend/prisma/migrations/
+old_backend/prisma/dev.db
+old_backend/prisma/*.db
 prisma/migrations/
 
 # ============================================
@@ -117,6 +135,21 @@ frontend/src/logo.svg
 frontend/src/App.test.tsx
 frontend/src/reportWebVitals.ts
 
+# Python specific
+*.pyc
+__pycache__/
+.pytest_cache/
+*.so
+.Python
+.env.venv
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Old backend node_modules
+old_backend/node_modules/
+
 # ============================================
 # SECURITY & SECRETS
 # ============================================
@@ -135,5 +168,9 @@ secrets/
 # ============================================
 # OTHER
 # ============================================
+#Backups
+old_backend/
+
 #Vercel
+old_backend/.vercel
 backend/.vercel
