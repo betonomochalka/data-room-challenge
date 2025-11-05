@@ -75,7 +75,7 @@ export function FolderView() {
     // Remove '/folders' prefix and any leading/trailing slashes
     const match = location.pathname.match(/^\/folders\/(.+)$/);
     return match ? match[1] : '';
-  }, [location?.pathname]);
+  }, [location]);
 
   // Fetch all folders for path resolution - enable via useDataRoomData but trigger in background
   // This allows path resolution while deferring the query load

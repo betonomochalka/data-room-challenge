@@ -606,7 +606,7 @@ const FileTree: React.FC = () => {
     if (!location || !location.pathname) return '';
     const match = location.pathname.match(/^\/folders\/(.+)$/);
     return match ? match[1] : '';
-  }, [location?.pathname]);
+  }, [location]);
 
   const folders = useMemo(() => {
     return foldersQuery.data?.data?.folders || [];
