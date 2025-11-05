@@ -115,6 +115,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     initializationStartedRef.current = true;
 
     // Get initial session and user
+    // This also handles OAuth callback hash fragments automatically
     supabase.auth.getSession()
       .then(async ({ data: { session }, error }) => {
         clearTimeout(timeoutId);
@@ -138,6 +139,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         
         finishInitialization();
+        
+        // Clean up OAuth hash fragments from URL after processing
+        if (window.location.hash.includes('access_token') || window.location.hash.includes('error')) {
+          // Remove hash fragments after a short delay to allow auth state change to process
+          setTimeout(() => {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }, 100);
+        }
       })
       .catch((error) => {
         clearTimeout(timeoutId);
@@ -198,14 +207,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const signInWithGoogle = async () => {
     try {
       setLoading(true);
+      // Use current origin for redirect URL (works in both dev and production)
+      // Fallback to env variable or localhost for edge cases
+      // Redirect to root path after OAuth completes
+      const baseUrl = process.env.REACT_APP_SITE_URL || window.location.origin;
+      const redirectUrl = `${baseUrl}/`;
+      
       // Redirect to the correct frontend domain
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: process.env.REACT_APP_SITE_URL || 'http://localhost:3000',
+          redirectTo: redirectUrl,
         },
       });
       if (error) throw error;
+      // Note: setLoading(false) is not called here because the page will redirect
+      // The loading state will be reset when the user returns from OAuth
     } catch (error) {
       console.error('Error signing in with Google:', error);
       setLoading(false);
