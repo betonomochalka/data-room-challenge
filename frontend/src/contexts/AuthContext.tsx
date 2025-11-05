@@ -154,44 +154,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, timeoutDuration);
 
     // For OAuth callbacks, Supabase will process hash fragments and fire SIGNED_IN event
-    // So we should wait for onAuthStateChange to handle it instead of calling getSession() immediately
+    // But we also need to check session immediately in case hash was already processed
     // For normal page loads, we call getSession() to check for existing session
     
-    if (!isOAuthCallback) {
-      // Normal page load - check for existing session
-      supabase.auth.getSession()
-        .then(async ({ data: { session }, error }) => {
-          clearTimeout(timeoutId);
-          
-          if (error) {
-            console.error('[AuthContext] Error getting session:', error);
-            setUser(null);
-            setSession(null);
-            finishInitialization();
-            return;
-          }
-
-          // Set token BEFORE calling fetchUser
-          setAuthToken(session?.access_token ?? null);
-          setSession(session);
-          
-          if (session) {
-            await fetchUser();
-          } else {
-            setUser(null);
-          }
-          
-          finishInitialization();
-        })
-        .catch((error) => {
-          clearTimeout(timeoutId);
+    // Always call getSession() - it will handle hash fragments if present
+    // Supabase processes hash fragments synchronously when getSession() is called
+    supabase.auth.getSession()
+      .then(async ({ data: { session }, error }) => {
+        clearTimeout(timeoutId);
+        
+        if (error) {
           console.error('[AuthContext] Error getting session:', error);
           setUser(null);
           setSession(null);
           finishInitialization();
-        });
-    }
-    // OAuth callback: wait for onAuthStateChange to process hash fragments
+          return;
+        }
+
+        // Set token BEFORE calling fetchUser
+        setAuthToken(session?.access_token ?? null);
+        setSession(session);
+        
+        if (session) {
+          await fetchUser();
+        } else {
+          setUser(null);
+        }
+        
+        // Always finish initialization after getSession()
+        // onAuthStateChange will handle subsequent updates
+        finishInitialization();
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        console.error('[AuthContext] Error getting session:', error);
+        setUser(null);
+        setSession(null);
+        finishInitialization();
+      });
 
     // Listen for auth changes
     const {
@@ -199,33 +199,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[AuthContext] Auth state change:', event, session ? 'has session' : 'no session');
       
-      // Skip INITIAL_SESSION - we handle it in getSession() for normal page loads
+      // Skip INITIAL_SESSION - getSession() already handled it
       // INITIAL_SESSION fires synchronously when onAuthStateChange is called,
-      // but we're already handling initialization in getSession() for non-OAuth flows
+      // but we've already processed it in getSession()
       if (event === 'INITIAL_SESSION') {
-        // For OAuth callbacks, INITIAL_SESSION might fire before hash is processed
-        // So we still process it if we're in OAuth callback mode
-        if (!isOAuthCallback) {
-          return;
-        }
+        return;
       }
       
       // Clear timeout since we're processing auth state change
       clearTimeout(timeoutId);
       
-      // For other events, process them normally
       // Set token BEFORE calling fetchUser
       setAuthToken(session?.access_token ?? null);
       setSession(session);
       
-      // Handle other auth events
+      // Handle auth events (only after initialization is complete)
       if (session) {
         await fetchUser();
       } else {
         setUser(null);
       }
       
-      // Only finish initialization if not already done (for SIGNED_IN/SIGNED_OUT during init)
+      // Finish initialization if not already done (shouldn't happen, but safety net)
       if (!isInitializedRef.current) {
         finishInitialization();
       }
