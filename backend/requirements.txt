@@ -5,7 +5,6 @@ python-dotenv==1.0.0
 SQLAlchemy==2.0.23
 psycopg2-binary==2.9.9
 supabase==2.23.0
-PyJWT==2.8.0
 cryptography==41.0.7
 google-auth==2.23.4
 google-auth-oauthlib==1.1.0
@@ -15,4 +14,4 @@ Werkzeug==3.0.1
 marshmallow==3.20.1
 websockets>=15.0
 requests==2.31.0
-pyjwt[crypto]>=2.8.0
+pyjwt[crypto]>=2.8.0,<3.0.0
