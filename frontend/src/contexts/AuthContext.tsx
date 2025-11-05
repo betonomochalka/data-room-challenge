@@ -78,18 +78,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const currentSession = await supabase.auth.getSession();
         if (currentSession.data.session?.access_token) {
           setAuthToken(currentSession.data.session.access_token);
+        } else {
+          console.warn('[AuthContext] fetchUser: No access token in session');
+          setUser(null);
+          return;
         }
         
         const { api } = await import('../lib/api'); // Lazy import
         const { data } = await api.get('/auth/me');
         if (data.success) {
+          console.log('[AuthContext] fetchUser: User fetched successfully', data.data);
           setUser(data.data);
         } else {
+          console.warn('[AuthContext] fetchUser: API returned unsuccessful response', data);
           setUser(null);
         }
       } catch (error) {
         console.error('[AuthContext] fetchUser: Error fetching user profile', error);
-        setUser(null);
+        // Don't set user to null on error - keep existing session
+        // The error might be temporary (network issue, etc.)
+        // Only set to null if it's a 401 (unauthorized)
+        if (error && typeof error === 'object' && 'response' in error) {
+          const axiosError = error as { response?: { status?: number } };
+          if (axiosError.response?.status === 401) {
+            console.warn('[AuthContext] fetchUser: 401 Unauthorized - clearing user');
+            setUser(null);
+          }
+        }
       }
     };
 
@@ -100,73 +115,103 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
 
-    // Set a timeout to ensure loading is always set to false
-    const timeoutId = setTimeout(() => {
-      if (!isInitializedRef.current) {
-        console.error('[AuthContext] Initialization timeout - forcing loading to false');
-        finishInitialization();
-      }
-    }, 30000); // 30 second timeout
-
     // Prevent multiple initializations
     if (initializationStartedRef.current) {
       return;
     }
     initializationStartedRef.current = true;
 
-    // Get initial session and user
-    // This also handles OAuth callback hash fragments automatically
-    supabase.auth.getSession()
-      .then(async ({ data: { session }, error }) => {
-        clearTimeout(timeoutId);
-        
-        if (error) {
+    // Check if we're returning from OAuth callback (has hash fragments)
+    const isOAuthCallback = window.location.hash.includes('access_token') || 
+                           window.location.hash.includes('error') ||
+                           window.location.hash.includes('error_description');
+
+    // Set a timeout to ensure loading is always set to false
+    // Use shorter timeout for OAuth callbacks
+    const timeoutDuration = isOAuthCallback ? 5000 : 30000;
+    let timeoutId: NodeJS.Timeout = setTimeout(() => {
+      if (!isInitializedRef.current) {
+        if (isOAuthCallback) {
+          console.warn('[AuthContext] OAuth callback timeout - checking session');
+          // Fallback: try to get session anyway
+          supabase.auth.getSession()
+            .then(async ({ data: { session }, error }) => {
+              if (!error && session) {
+                setAuthToken(session.access_token ?? null);
+                setSession(session);
+                await fetchUser();
+              }
+              finishInitialization();
+            })
+            .catch(() => {
+              finishInitialization();
+            });
+        } else {
+          console.error('[AuthContext] Initialization timeout - forcing loading to false');
+          finishInitialization();
+        }
+      }
+    }, timeoutDuration);
+
+    // For OAuth callbacks, Supabase will process hash fragments and fire SIGNED_IN event
+    // So we should wait for onAuthStateChange to handle it instead of calling getSession() immediately
+    // For normal page loads, we call getSession() to check for existing session
+    
+    if (!isOAuthCallback) {
+      // Normal page load - check for existing session
+      supabase.auth.getSession()
+        .then(async ({ data: { session }, error }) => {
+          clearTimeout(timeoutId);
+          
+          if (error) {
+            console.error('[AuthContext] Error getting session:', error);
+            setUser(null);
+            setSession(null);
+            finishInitialization();
+            return;
+          }
+
+          // Set token BEFORE calling fetchUser
+          setAuthToken(session?.access_token ?? null);
+          setSession(session);
+          
+          if (session) {
+            await fetchUser();
+          } else {
+            setUser(null);
+          }
+          
+          finishInitialization();
+        })
+        .catch((error) => {
+          clearTimeout(timeoutId);
           console.error('[AuthContext] Error getting session:', error);
           setUser(null);
           setSession(null);
           finishInitialization();
-          return;
-        }
-
-        // Set token BEFORE calling fetchUser
-        setAuthToken(session?.access_token ?? null);
-        setSession(session);
-        
-        if (session) {
-          await fetchUser();
-        } else {
-          setUser(null);
-        }
-        
-        finishInitialization();
-        
-        // Clean up OAuth hash fragments from URL after processing
-        if (window.location.hash.includes('access_token') || window.location.hash.includes('error')) {
-          // Remove hash fragments after a short delay to allow auth state change to process
-          setTimeout(() => {
-            window.history.replaceState(null, '', window.location.pathname + window.location.search);
-          }, 100);
-        }
-      })
-      .catch((error) => {
-        clearTimeout(timeoutId);
-        console.error('[AuthContext] Error getting session:', error);
-        setUser(null);
-        setSession(null);
-        finishInitialization();
-      });
+        });
+    }
+    // OAuth callback: wait for onAuthStateChange to process hash fragments
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Skip INITIAL_SESSION - we handle it in getSession()
+      console.log('[AuthContext] Auth state change:', event, session ? 'has session' : 'no session');
+      
+      // Skip INITIAL_SESSION - we handle it in getSession() for normal page loads
       // INITIAL_SESSION fires synchronously when onAuthStateChange is called,
-      // but we're already handling initialization in getSession()
+      // but we're already handling initialization in getSession() for non-OAuth flows
       if (event === 'INITIAL_SESSION') {
-        // Don't do anything here - let getSession() handle initialization
-        return;
+        // For OAuth callbacks, INITIAL_SESSION might fire before hash is processed
+        // So we still process it if we're in OAuth callback mode
+        if (!isOAuthCallback) {
+          return;
+        }
       }
+      
+      // Clear timeout since we're processing auth state change
+      clearTimeout(timeoutId);
       
       // For other events, process them normally
       // Set token BEFORE calling fetchUser
@@ -185,11 +230,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         finishInitialization();
       }
       
-      if (session?.user) {
+      // Handle SIGNED_IN event (especially important for OAuth callbacks)
+      if (event === 'SIGNED_IN' && session?.user) {
         const loginToastShown = sessionStorage.getItem('login_toast_shown');
-        if (event === 'SIGNED_IN' && !loginToastShown) {
+        if (!loginToastShown) {
           toast.success(SUCCESS_MESSAGES.LOGIN_SUCCESS);
           sessionStorage.setItem('login_toast_shown', 'true');
+        }
+        
+        // Clean up OAuth hash fragments if present
+        if (window.location.hash.includes('access_token')) {
+          setTimeout(() => {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }, 100);
         }
       }
       
