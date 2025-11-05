@@ -602,9 +602,11 @@ const FileTree: React.FC = () => {
 
   // Get current folder path from URL and resolve to folder ID
   const folderPath = useMemo(() => {
+    // Safety check: ensure location and pathname exist
+    if (!location || !location.pathname) return '';
     const match = location.pathname.match(/^\/folders\/(.+)$/);
     return match ? match[1] : '';
-  }, [location.pathname]);
+  }, [location?.pathname]);
 
   const folders = useMemo(() => {
     return foldersQuery.data?.data?.folders || [];
