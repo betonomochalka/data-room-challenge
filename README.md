@@ -1,21 +1,5 @@
 # Data Room
 
-Data Room is a secure document workspace for teams to organise, preview, and share files inside dedicated data rooms. The repository is a monorepo that pairs a React single-page application with a Flask API backend connected to Supabase for authentication, PostgreSQL, and file storage.
-
-## Table of Contents
-- [Highlights](#highlights)
-- [Tech Stack](#tech-stack)
-- [Monorepo Layout](#monorepo-layout)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [Running Locally](#running-locally)
-- [Database & Persistence](#database--persistence)
-- [Optional Integrations](#optional-integrations)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Troubleshooting](#troubleshooting)
-- [Additional Documentation](#additional-documentation)
-
 ## Highlights
 - Supabase-authenticated login with Google OAuth and automatic user bootstrap on the backend.
 - Hierarchical data-room and folder tree with contextual actions and optimistic updates powered by TanStack Query.
@@ -71,7 +55,7 @@ data-room/
 ### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/betonomochalka/data-room-challenge.git
 cd data-room
 ```
 
@@ -92,7 +76,7 @@ Copy the example files and adjust the values from your Supabase and Google Cloud
 
 ```bash
 cp backend/env.example backend/.env
-cp frontend/env.example frontend/.env.local
+cp frontend/env.example frontend/.env
 ```
 
 Update:
@@ -145,12 +129,6 @@ The backend automatically creates tables on first run (`db.create_all()`). Confi
 - Populate `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI`.
 - The frontend exposes connect/disconnect flows and Drive file pickers that call the Flask service in `backend/services/google_drive_service.py`.
 
-**Caching**
-
-- The backend ships with a tag-aware cache layer (`backend/utils/cache.py`) that prefers Redis but falls back to an in-memory store.
-- Set `REDIS_URL`, `CACHE_ENABLED`, and optionally `CACHE_TTL` in `backend/.env`.
-- See `backend/CACHING.md` for architecture and operational guide.
-
 ## Testing
 
 - Frontend: `npm test` runs Jest + React Testing Library (configured in `frontend/package.json` and `craco.config.js`).
@@ -174,13 +152,6 @@ The project deploys cleanly to Vercel or any platform that supports static front
   - Provide `DATABASE_URL`, Supabase keys, allowed origins, and Google/Redis credentials if used.
 
 When deploying elsewhere (Railway, Fly, etc.), make sure the environment exposes the same variables and allows outbound connections to Supabase and Google APIs.
-
-## Troubleshooting
-
-- `401 Unauthorized`: confirm Supabase credentials and that the frontend sends the JWT via `Authorization` header (handled by `lib/api.ts` once `AuthContext` sets the token).
-- Database timeouts: adjust pool sizes or switch to Supabase transaction pool (`:6543`) as recommended in `backend/env.example`.
-- Google Drive OAuth redirect issues: ensure `GOOGLE_REDIRECT_URI` matches exactly in Google Cloud and the backend config.
-- Missing env variables: the backend fails fast—check terminal logs when `Config.validate()` raises.
 
 ## Additional Documentation
 
