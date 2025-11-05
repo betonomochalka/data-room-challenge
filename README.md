@@ -156,5 +156,4 @@ When deploying elsewhere (Railway, Fly, etc.), make sure the environment exposes
 ## Additional Documentation
 
 - `ARCHITECTURE.md` — subsystem deep dive and sequence diagrams.
-- `backend/CACHING.md` — cache architecture and operations.
 - `backend/services/google_drive_service.py` — reference implementation for Drive import flow.
