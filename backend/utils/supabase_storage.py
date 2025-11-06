@@ -1,6 +1,8 @@
 """
 Supabase storage utilities
 """
+import os
+from datetime import datetime, timedelta
 from supabase import create_client, Client
 from config import Config
 
@@ -13,8 +15,6 @@ def create_signed_upload_url(file_name: str, folder: str = 'uploads', mime_type:
     Returns:
         dict with 'upload_url', 'file_path', and 'expires_at'
     """
-    import os
-    from datetime import datetime, timedelta
     
     # Generate unique file path
     file_ext = os.path.splitext(file_name)[1]
