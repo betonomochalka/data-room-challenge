@@ -72,46 +72,59 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const initializationStartedRef = useRef(false);
 
   useEffect(() => {
-    const fetchUser = async () => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    let isMounted = true;
+
+    const fetchUser = async (sessionToken?: string) => {
       try {
-        // Ensure token is set before making the request
-        const currentSession = await supabase.auth.getSession();
-        if (currentSession.data.session?.access_token) {
-          setAuthToken(currentSession.data.session.access_token);
-        } else {
+        // Use provided token or get current session
+        let accessToken = sessionToken;
+        if (!accessToken) {
+          const currentSession = await supabase.auth.getSession();
+          accessToken = currentSession.data.session?.access_token;
+        }
+        
+        if (!accessToken) {
           console.warn('[AuthContext] fetchUser: No access token in session');
           setUser(null);
           return;
         }
         
+        setAuthToken(accessToken);
+        
         const { api } = await import('../lib/api'); // Lazy import
         const { data } = await api.get('/auth/me');
         if (data.success) {
           console.log('[AuthContext] fetchUser: User fetched successfully', data.data);
-          setUser(data.data);
+          if (isMounted) {
+            setUser(data.data);
+          }
         } else {
           console.warn('[AuthContext] fetchUser: API returned unsuccessful response', data);
-          setUser(null);
+          if (isMounted) {
+            setUser(null);
+          }
         }
       } catch (error) {
         console.error('[AuthContext] fetchUser: Error fetching user profile', error);
-        // Don't set user to null on error - keep existing session
-        // The error might be temporary (network issue, etc.)
-        // Only set to null if it's a 401 (unauthorized)
+        // Only set user to null if it's a 401 (unauthorized)
         if (error && typeof error === 'object' && 'response' in error) {
           const axiosError = error as { response?: { status?: number } };
           if (axiosError.response?.status === 401) {
             console.warn('[AuthContext] fetchUser: 401 Unauthorized - clearing user');
-            setUser(null);
+            if (isMounted) {
+              setUser(null);
+            }
           }
         }
       }
     };
 
     const finishInitialization = () => {
-      if (!isInitializedRef.current) {
+      if (!isInitializedRef.current && isMounted) {
         isInitializedRef.current = true;
         setLoading(false);
+        console.log('[AuthContext] Initialization finished');
       }
     };
 
@@ -127,42 +140,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                            window.location.hash.includes('error_description');
 
     // Set a timeout to ensure loading is always set to false
-    // Use shorter timeout for OAuth callbacks
-    // Reduced from 30s to 10s for normal page loads to fail faster
-    const timeoutDuration = isOAuthCallback ? 5000 : 10000;
-    let timeoutId: NodeJS.Timeout = setTimeout(() => {
-      if (!isInitializedRef.current) {
-        if (isOAuthCallback) {
-          console.warn('[AuthContext] OAuth callback timeout - checking session');
-          // Fallback: try to get session anyway
-          supabase.auth.getSession()
-            .then(async ({ data: { session }, error }) => {
-              if (!error && session) {
-                setAuthToken(session.access_token ?? null);
-                setSession(session);
-                await fetchUser();
-              }
-              finishInitialization();
-            })
-            .catch(() => {
-              finishInitialization();
-            });
-        } else {
-          console.error('[AuthContext] Initialization timeout - forcing loading to false');
-          finishInitialization();
-        }
+    const timeoutDuration = isOAuthCallback ? 5000 : 8000;
+    timeoutId = setTimeout(() => {
+      if (!isInitializedRef.current && isMounted) {
+        console.warn('[AuthContext] Initialization timeout - forcing loading to false');
+        finishInitialization();
       }
     }, timeoutDuration);
 
-    // For OAuth callbacks, Supabase will process hash fragments and fire SIGNED_IN event
-    // But we also need to check session immediately in case hash was already processed
-    // For normal page loads, we call getSession() to check for existing session
-    
-    // Always call getSession() - it will handle hash fragments if present
-    // Supabase processes hash fragments synchronously when getSession() is called
+    // Always call getSession() first - it will handle hash fragments if present
     supabase.auth.getSession()
       .then(async ({ data: { session }, error }) => {
-        clearTimeout(timeoutId);
+        if (!isMounted) return;
+        
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
         
         if (error) {
           console.error('[AuthContext] Error getting session:', error);
@@ -172,15 +166,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return;
         }
 
-        // Set token BEFORE calling fetchUser
+        // Set token and session
         setAuthToken(session?.access_token ?? null);
         setSession(session);
         
-        if (session) {
-          // Add timeout to fetchUser to prevent it from blocking initialization
-          // Use Promise.race to ensure fetchUser doesn't block initialization
-          const fetchUserPromise = fetchUser().catch((error) => {
-            // fetchUser already handles errors internally, just log here
+        if (session?.access_token) {
+          // Fetch user with timeout to prevent blocking
+          const fetchUserPromise = fetchUser(session.access_token).catch((error) => {
             console.error('[AuthContext] fetchUser error:', error);
           });
           
@@ -191,53 +183,63 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }, 5000); // 5 second timeout for fetchUser
           });
           
-          // Race between fetchUser and timeout - whichever finishes first wins
-          // This ensures initialization completes even if fetchUser is slow
           await Promise.race([fetchUserPromise, timeoutPromise]);
         } else {
           setUser(null);
         }
         
         // Always finish initialization after getSession()
-        // onAuthStateChange will handle subsequent updates
         finishInitialization();
       })
       .catch((error) => {
-        clearTimeout(timeoutId);
+        if (!isMounted) return;
+        
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        
         console.error('[AuthContext] Error getting session:', error);
         setUser(null);
         setSession(null);
         finishInitialization();
       });
 
-    // Listen for auth changes
+    // Listen for auth changes (but don't interfere with initial load)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      
       console.log('[AuthContext] Auth state change:', event, session ? 'has session' : 'no session');
       
       // Skip INITIAL_SESSION - getSession() already handled it
-      // INITIAL_SESSION fires synchronously when onAuthStateChange is called,
-      // but we've already processed it in getSession()
       if (event === 'INITIAL_SESSION') {
+        // But ensure initialization finishes if it hasn't yet
+        if (!isInitializedRef.current) {
+          finishInitialization();
+        }
         return;
       }
       
-      // Clear timeout since we're processing auth state change
-      clearTimeout(timeoutId);
+      // Clear timeout if still running
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       
-      // Set token BEFORE calling fetchUser
+      // Set token and session
       setAuthToken(session?.access_token ?? null);
       setSession(session);
       
-      // Handle auth events (only after initialization is complete)
-      if (session) {
-        await fetchUser();
+      // Handle auth events
+      if (session?.access_token) {
+        await fetchUser(session.access_token);
       } else {
         setUser(null);
       }
       
-      // Finish initialization if not already done (shouldn't happen, but safety net)
+      // Finish initialization if not already done (safety net)
       if (!isInitializedRef.current) {
         finishInitialization();
       }
@@ -264,7 +266,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     return () => {
-      clearTimeout(timeoutId);
+      isMounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       subscription.unsubscribe();
     };
   }, []);
