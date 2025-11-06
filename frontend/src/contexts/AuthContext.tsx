@@ -128,7 +128,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Set a timeout to ensure loading is always set to false
     // Use shorter timeout for OAuth callbacks
-    const timeoutDuration = isOAuthCallback ? 5000 : 30000;
+    // Reduced from 30s to 10s for normal page loads to fail faster
+    const timeoutDuration = isOAuthCallback ? 5000 : 10000;
     let timeoutId: NodeJS.Timeout = setTimeout(() => {
       if (!isInitializedRef.current) {
         if (isOAuthCallback) {
@@ -176,7 +177,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSession(session);
         
         if (session) {
-          await fetchUser();
+          // Add timeout to fetchUser to prevent it from blocking initialization
+          // Use Promise.race to ensure fetchUser doesn't block initialization
+          const fetchUserPromise = fetchUser().catch((error) => {
+            // fetchUser already handles errors internally, just log here
+            console.error('[AuthContext] fetchUser error:', error);
+          });
+          
+          const timeoutPromise = new Promise<void>((resolve) => {
+            setTimeout(() => {
+              console.warn('[AuthContext] fetchUser taking too long, finishing initialization');
+              resolve();
+            }, 5000); // 5 second timeout for fetchUser
+          });
+          
+          // Race between fetchUser and timeout - whichever finishes first wins
+          // This ensures initialization completes even if fetchUser is slow
+          await Promise.race([fetchUserPromise, timeoutPromise]);
         } else {
           setUser(null);
         }
