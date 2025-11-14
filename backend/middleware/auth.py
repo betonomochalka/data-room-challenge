@@ -11,6 +11,10 @@ from middleware.error_handler import create_error, AppError
 from sqlalchemy.exc import OperationalError, DatabaseError
 from utils.user_cache import get_user_id_from_cache, set_user_id_in_cache
 from utils.jwt_verifier import verify_supabase_jwt
+from utils.rate_limiter import (
+    check_rate_limit, record_failed_attempt, reset_rate_limit,
+    check_fallback_rate_limit, record_fallback_attempt
+)
 import time
 
 # Initialize Supabase client for fallback remote verification
@@ -34,6 +38,12 @@ def authenticate_token(f):
             token = auth_header.split(' ')[1]
         except IndexError:
             raise create_error('Invalid authorization header format', 401)
+        
+        # Rate limiting: Check if client has exceeded rate limit
+        client_id = request.remote_addr or 'unknown'
+        allowed, rate_limit_error = check_rate_limit(client_id)
+        if not allowed:
+            raise create_error(rate_limit_error or 'Rate limit exceeded', 429)
         
         # Try local JWT verification first (fast), fall back to remote if it fails
         token_verify_start = time.perf_counter()
@@ -60,33 +70,62 @@ def authenticate_token(f):
                 
         except ValueError:
             # Signature verification failed - fall back to remote verification
-            print(f'Local JWT verification failed (signature mismatch), falling back to remote')
+            # Check fallback rate limit (more restrictive to prevent DoS)
+            allowed, fallback_error = check_fallback_rate_limit(client_id)
+            if not allowed:
+                record_failed_attempt(client_id)
+                raise create_error(fallback_error or 'Too many authentication attempts', 429)
+            
+            record_fallback_attempt(client_id)
+            
+            # Log only in development
+            from config import Config
+            if Config.NODE_ENV == 'development':
+                print(f'Local JWT verification failed (signature mismatch), falling back to remote')
+            
             try:
                 response = supabase.auth.get_user(token)
                 if response.user is None:
+                    record_failed_attempt(client_id)
                     raise create_error('Invalid or expired token', 401)
                 
                 supabase_uid = response.user.id
                 email = response.user.email
                 user_metadata = response.user.user_metadata if hasattr(response.user, 'user_metadata') else {}
             except Exception as e2:
-                print(f'Remote token verification also failed: {e2}')
+                record_failed_attempt(client_id)
+                if Config.NODE_ENV == 'development':
+                    print(f'Remote token verification also failed: {e2}')
                 raise create_error('Invalid or expired token', 401)
         except AppError:
             raise  # Re-raise our custom errors (expired, invalid format, etc.)
         except Exception as e:
             # Unexpected error - fall back to remote verification
-            print(f'Local JWT verification failed (unexpected error), falling back to remote: {e}')
+            # Check fallback rate limit
+            allowed, fallback_error = check_fallback_rate_limit(client_id)
+            if not allowed:
+                record_failed_attempt(client_id)
+                raise create_error(fallback_error or 'Too many authentication attempts', 429)
+            
+            record_fallback_attempt(client_id)
+            
+            from config import Config
+            if Config.NODE_ENV == 'development':
+                print(f'Local JWT verification failed (unexpected error), falling back to remote: {e}')
+            
             try:
                 response = supabase.auth.get_user(token)
                 if response.user is None:
+                    record_failed_attempt(client_id)
                     raise create_error('Invalid or expired token', 401)
                 
                 supabase_uid = response.user.id
                 email = response.user.email
                 user_metadata = response.user.user_metadata if hasattr(response.user, 'user_metadata') else {}
             except Exception as e2:
-                print(f'Remote token verification also failed: {e2}')
+                record_failed_attempt(client_id)
+                if Config.NODE_ENV == 'development':
+                    print(f'Remote token verification also failed: {e2}')
                 raise create_error('Invalid or expired token', 401)
         
         token_verify_time = (time.perf_counter() - token_verify_start) * 1000
@@ -104,6 +143,9 @@ def authenticate_token(f):
                     # Query by ID (primary key - fastest lookup)
                     user = User.query.get(cached_user_id)
                     if user and user.supabase_uid == supabase_uid:
+                        # Reset rate limit on successful authentication
+                        reset_rate_limit(client_id)
+                        
                         # Attach user to request context
                         g.user = user
                         
@@ -165,6 +207,9 @@ def authenticate_token(f):
                 # Cache user ID for future requests
                 set_user_id_in_cache(supabase_uid, user.id)
                 
+                # Reset rate limit on successful authentication
+                reset_rate_limit(client_id)
+                
                 # Attach user to request context
                 g.user = user
                 
@@ -213,7 +258,10 @@ def authenticate_token(f):
             except Exception as e:
                 # Rollback the session on any other error
                 db.session.rollback()
-                print(f'Unexpected error in authenticate_token: {e}')
+                record_failed_attempt(client_id)
+                from config import Config
+                if Config.NODE_ENV == 'development':
+                    print(f'Unexpected error in authenticate_token: {e}')
                 raise create_error('Authentication error', 500)
     
     return decorated_function
