@@ -1,15 +1,10 @@
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
 import { Company } from '../../pages/Company';
 
 describe('Company Page', () => {
   it('shows the LeadBox AI offer and valuation model', () => {
-    render(
-      <MemoryRouter>
-        <Company />
-      </MemoryRouter>
-    );
+    render(<Company />);
 
     expect(screen.getByText('LeadBox AI')).toBeInTheDocument();
     expect(screen.getByText(/Turn every client conversation into a secure sales room/i)).toBeInTheDocument();

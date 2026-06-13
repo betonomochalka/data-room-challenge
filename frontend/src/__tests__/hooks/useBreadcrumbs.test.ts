@@ -28,7 +28,7 @@ describe('useBreadcrumbs Hook', () => {
       expect(result.current[0]).toEqual({
         id: mockDataRoomId,
         name: mockDataRoomName,
-        path: `/data-rooms/${mockDataRoomId}`,
+        path: '/',
       });
     });
 
@@ -63,7 +63,7 @@ describe('useBreadcrumbs Hook', () => {
       expect(result.current[1]).toEqual({
         id: 'folder-1',
         name: 'Documents',
-        path: `/data-rooms/${mockDataRoomId}/folders/folder-1`,
+        path: '/folders/Documents',
       });
     });
 
@@ -82,7 +82,7 @@ describe('useBreadcrumbs Hook', () => {
       expect(result.current[1]).toEqual({
         id: 'folder-1',
         name: 'Documents',
-        path: `/data-rooms/${mockDataRoomId}/folders/folder-1`,
+        path: '/folders/Documents',
       });
     });
   });
@@ -308,9 +308,9 @@ describe('useBreadcrumbs Hook', () => {
         })
       );
 
-      expect(result.current[0].path).toBe(`/data-rooms/${mockDataRoomId}`);
-      expect(result.current[1].path).toBe(`/data-rooms/${mockDataRoomId}/folders/folder-1`);
-      expect(result.current[2].path).toBe(`/data-rooms/${mockDataRoomId}/folders/folder-2`);
+      expect(result.current[0].path).toBe('/');
+      expect(result.current[1].path).toBe('/folders/Documents');
+      expect(result.current[2].path).toBe('/folders/Documents/Reports');
     });
   });
 });

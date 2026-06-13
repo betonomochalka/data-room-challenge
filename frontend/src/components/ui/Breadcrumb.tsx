@@ -39,6 +39,13 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, className = '' })
     const MIN_ITEM_WIDTH = 80; // Minimum width for each visible item
     const SEPARATOR_WIDTH = 16; // Width of ChevronRight separator
     const ELLIPSIS_WIDTH = 40; // Width of "..." button
+
+    if (containerWidth === 0) {
+      setVisibleItems(items.map((_, i) => i));
+      setNeedsCollapse(false);
+      setHiddenItems([]);
+      return;
+    }
     
     // If we have few items or enough space, show all
     if (items.length <= 2) {

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { BreadcrumbItem } from '@/components/ui/Breadcrumb';
 import { Folder } from '@/types';
-import { buildFolderUrlFromId } from '@/utils/folderPaths';
+import { buildFolderUrl, buildFolderUrlFromId, buildPathFromNames } from '@/utils/folderPaths';
 
 interface UseBreadcrumbsProps {
   dataRoomId: string;
@@ -51,6 +51,7 @@ export const useBreadcrumbs = ({
       while (folder && depth < MAX_DEPTH) {
         // Check for circular reference
         if (visited.has(folder.id)) {
+          console.warn('Circular reference detected in folder hierarchy');
           break;
         }
         
@@ -79,7 +80,7 @@ export const useBreadcrumbs = ({
       breadcrumbs.push({
         id: currentFolderId,
         name: currentFolderName,
-        path: buildFolderUrlFromId(currentFolderId, allFolders),
+        path: buildFolderUrl(buildPathFromNames([currentFolderName])),
       });
     }
 
