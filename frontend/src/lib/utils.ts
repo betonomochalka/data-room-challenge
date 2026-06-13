@@ -15,7 +15,7 @@ export function formatBytes(bytesValue: number | string, decimals = 2) {
 
   // Use bytes package for formatting
   const result = bytes(numBytes, { decimalPlaces: decimals });
-  return result || '0 Bytes';
+  return result?.replace(/^([\d.]+)([A-Za-z]+)$/, '$1 $2') || '0 Bytes';
 }
 
 export function formatDate(date: string | Date) {

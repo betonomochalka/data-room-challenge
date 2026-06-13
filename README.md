@@ -1,6 +1,7 @@
 # Data Room
 
 ## Highlights
+- Public LeadBox AI company page at `/company` for positioning the product as a paid B2B SaaS sales-room offer.
 - Supabase-authenticated login with Google OAuth and automatic user bootstrap on the backend.
 - Hierarchical data-room and folder tree with contextual actions and optimistic updates powered by TanStack Query.
 - Direct-to-storage uploads and secure signed URLs served from Supabase Storage.
@@ -156,4 +157,5 @@ When deploying elsewhere (Railway, Fly, etc.), make sure the environment exposes
 ## Additional Documentation
 
 - `ARCHITECTURE.md` — subsystem deep dive and sequence diagrams.
+- `COMPANY_PLAN.md` — LeadBox AI positioning, pricing, launch loop, and $1.2M valuation model.
 - `backend/services/google_drive_service.py` — reference implementation for Drive import flow.

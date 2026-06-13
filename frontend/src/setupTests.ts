@@ -35,3 +35,12 @@ jest.mock('./lib/api', () => ({
     patch: jest.fn(),
   },
 }));
+
+// jsdom does not implement ResizeObserver, but responsive components use it.
+class ResizeObserverMock {
+  observe = jest.fn();
+  unobserve = jest.fn();
+  disconnect = jest.fn();
+}
+
+(global as any).ResizeObserver = ResizeObserverMock;

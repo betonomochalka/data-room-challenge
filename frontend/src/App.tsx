@@ -33,6 +33,7 @@ import { PrivateRoute } from './components/PrivateRoute';
  * The .then() part extracts the named export from each module.
  */
 const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
+const Company = lazy(() => import('./pages/Company').then(module => ({ default: module.Company })));
 const DataRoomRoot = lazy(() => import('./pages/DataRoomRoot').then(module => ({ default: module.DataRoomRoot })));
 const FolderView = lazy(() => import('./pages/FolderView').then(module => ({ default: module.FolderView })));
 
@@ -92,6 +93,7 @@ function App() {
           <Suspense fallback={<LoadingFallback />}>
             <Routes>
               {/* PUBLIC ROUTES - Anyone can access these */}
+              <Route path="/company" element={<Company />} />
               <Route path="/login" element={<Login />} />
               
               {/* PROTECTED ROUTES - Only logged-in users can access these */}
