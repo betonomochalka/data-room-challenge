@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card';
 import { Alert, AlertDescription } from '../components/ui/Alert';
@@ -94,6 +94,9 @@ export const Login: React.FC = () => {
 
             <div className="text-xs text-center text-muted-foreground">
               <p>Sign in with your Google account to access the data room</p>
+              <Link to="/company" className="mt-2 inline-block underline underline-offset-4">
+                View the LeadBox AI company plan
+              </Link>
             </div>
           </div>
         </CardContent>
