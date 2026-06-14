@@ -92,7 +92,7 @@ function App() {
           <Suspense fallback={<LoadingFallback />}>
             <Routes>
               {/* PUBLIC ROUTES - Anyone can access these */}
-              /* <Route path="/login" element={<Login />} /> */
+              {/* <Route path="/login" element={<Login />} /> */}
               
               {/* PROTECTED ROUTES - Only logged-in users can access these */}
               <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
